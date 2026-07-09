@@ -1,0 +1,22 @@
+[Unit]
+Description=Forecast Orchestrator API
+Wants=network-online.target
+After=network-online.target chronos-ml.service
+Requires=chronos-ml.service
+
+[Service]
+Type=simple
+User=oci-forecast
+Group=oci-forecast
+WorkingDirectory=/opt/oci-vllm-ml-inference
+EnvironmentFile=/etc/oci-forecast/forecast.env
+ExecStart=/opt/oci-vllm-ml-inference/.venv-orchestrator/bin/uvicorn orchestrator_api.app.main:app --host 0.0.0.0 --port ${ORCHESTRATOR_PORT}
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+

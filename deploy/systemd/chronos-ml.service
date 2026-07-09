@@ -1,0 +1,21 @@
+[Unit]
+Description=Chronos Forecast ML Service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=oci-forecast
+Group=oci-forecast
+WorkingDirectory=/opt/oci-vllm-ml-inference
+EnvironmentFile=/etc/oci-forecast/forecast.env
+ExecStart=/opt/oci-vllm-ml-inference/.venv-ml/bin/uvicorn ml_service.app.main:app --host 127.0.0.1 --port ${ML_SERVICE_PORT}
+Restart=always
+RestartSec=5
+TimeoutStartSec=300
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
