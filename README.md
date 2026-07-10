@@ -110,6 +110,45 @@ journalctl -u chronos-ml.service -f
 journalctl -u forecast-orchestrator.service -f
 ```
 
+## CSV Upload And Pretty Output
+
+The public orchestrator also accepts CSV uploads through:
+
+```text
+POST /predict/csv
+```
+
+Example CSV:
+
+```csv
+date,demand,promo_flag,inventory
+2026-07-01,120,0,450
+2026-07-02,127,0,430
+2026-07-03,131,1,410
+```
+
+From a laptop:
+
+```bash
+curl --noproxy '*' -sS -i \
+  -X POST http://<orchestrator-public-ip>:8080/predict/csv \
+  -F "file=@demand.csv" \
+  -F "date_column=date" \
+  -F "target_column=demand" \
+  -F "series_id=store-42-demand" \
+  -F "prediction_length=6" \
+  -F "notes=Promotion starts next week and inventory is constrained."
+```
+
+The numeric forecast still uses the target history. Extra CSV columns are treated as covariate/context fields for validation, metadata, and vLLM explanation context.
+
+All prediction responses include a `presentation` object with:
+
+- `predictions_text` - newline/star formatted forecast values.
+- `explanation_paragraph` - readable explanation text.
+- `recommendations_text` - readable next actions.
+- `enriched_csv` - for CSV uploads, original actuals plus forecast rows and explanation text as CSV.
+
 ## vLLM Endpoint
 
 The orchestrator expects an OpenAI-compatible vLLM endpoint:
@@ -132,4 +171,3 @@ python3 -m pytest
 ```
 
 The tests do not download Chronos. They exercise fallback behavior, response shape, vLLM fallback, orchestration, and disabled DB writes.
-

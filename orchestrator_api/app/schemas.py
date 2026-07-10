@@ -40,5 +40,6 @@ class CombinedPredictionResponse(BaseModel):
     explanation: Dict[str, Any]
     recommendations: Dict[str, Any]
     extracted_features: Dict[str, Any]
+    presentation: Dict[str, Any] = Field(default_factory=dict)
     database_write: Dict[str, Any]
     warnings: List[str] = Field(default_factory=list)

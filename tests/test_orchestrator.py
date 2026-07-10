@@ -98,6 +98,7 @@ def test_orchestrator_combines_ml_llm_and_db_results():
     assert body["ml_output"]["model_name"] == "amazon/chronos-t5-small"
     assert body["explanation"]["text"].startswith("Demand")
     assert body["recommendations"]["text"] == "- Check inventory."
+    assert body["presentation"]["predictions_text"].startswith("Predictions")
+    assert body["presentation"]["explanation_paragraph"] == "Demand is trending up with moderate risk."
     assert body["database_write"]["wrote"] is False
     assert body["warnings"] == []
-
