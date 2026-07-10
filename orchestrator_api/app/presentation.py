@@ -34,6 +34,36 @@ def build_presentation(
     return presentation
 
 
+def build_markdown_report(*, ml_output: Dict[str, Any], presentation: Dict[str, Any]) -> str:
+    """Build a curl-friendly Markdown report from the forecast presentation."""
+    lines = ["# Forecast Report", "", presentation.get("predictions_text", "").strip()]
+
+    summary = ml_output.get("summary") or {}
+    if summary:
+        lines.extend(
+            [
+                "",
+                "Summary",
+                "",
+                f"* Trend: {summary.get('trend_direction', 'unknown')}",
+                f"* Risk band: {summary.get('risk_band', 'unknown')}",
+                f"* Confidence: {_fmt_number(summary.get('confidence'))}",
+                f"* Final median: {_fmt_number(summary.get('final_median'))}",
+                f"* Baseline: {_fmt_number(summary.get('baseline'))}",
+            ]
+        )
+
+    explanation = presentation.get("explanation_paragraph")
+    if explanation:
+        lines.extend(["", "Explanation", "", explanation.strip()])
+
+    recommendations = presentation.get("recommendations_text")
+    if recommendations:
+        lines.extend(["", "Recommendations", "", recommendations.strip()])
+
+    return "\n".join(line for line in lines if line is not None).strip() + "\n"
+
+
 def _prediction_bullets(ml_output: Dict[str, Any]) -> str:
     horizon = ml_output.get("horizon") or []
     if not horizon:

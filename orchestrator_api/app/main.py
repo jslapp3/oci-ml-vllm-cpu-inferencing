@@ -6,6 +6,7 @@ import uuid
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import PlainTextResponse, Response
 from httpx import HTTPError
 from pydantic import ValidationError
 
@@ -14,7 +15,7 @@ from llm_service.app.client import VLLMCompanionClient
 from .csv_input import CsvForecastData, CsvInputError, csv_context_notes, parse_csv_forecast_upload, parse_quantile_levels
 from .db import DatabaseWriter
 from .ml_client import MLServiceClient
-from .presentation import build_presentation
+from .presentation import build_markdown_report, build_presentation
 from .schemas import CombinedPredictionResponse, PredictionRequest
 
 
@@ -53,7 +54,8 @@ def create_app(
         prediction_length: int = Form(12),
         notes: Optional[str] = Form(None),
         quantile_levels: str = Form("0.1,0.5,0.9"),
-    ) -> CombinedPredictionResponse:
+        response_format: str = Form("json"),
+    ):
         if prediction_length < 1:
             raise HTTPException(status_code=400, detail="prediction_length must be at least 1")
 
@@ -78,7 +80,29 @@ def create_app(
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=exc.errors()) from exc
 
-        return await _run_prediction(app, request, csv_data=csv_data)
+        response = await _run_prediction(app, request, csv_data=csv_data)
+        normalized_format = response_format.strip().lower()
+        if normalized_format in {"json", "full_json"}:
+            return response
+        if normalized_format in {"markdown", "md", "text"}:
+            return PlainTextResponse(
+                build_markdown_report(ml_output=response.ml_output, presentation=response.presentation),
+                media_type="text/markdown",
+            )
+        if normalized_format in {"csv", "enriched_csv"}:
+            enriched_csv = response.presentation.get("enriched_csv")
+            if not enriched_csv:
+                raise HTTPException(status_code=500, detail="enriched CSV was not generated")
+            return Response(
+                content=enriched_csv,
+                media_type="text/csv",
+                headers={"Content-Disposition": 'attachment; filename="forecast_enriched.csv"'},
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail="response_format must be one of json, markdown, or csv",
+        )
 
     return app
 

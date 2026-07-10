@@ -27,6 +27,11 @@ class SuccessfulAsyncClient:
         return FakeResponse('{"signals":["promo"],"constraints":["inventory"],"events":[],"urgency":"medium"}')
 
 
+class ThinkingAsyncClient:
+    async def post(self, *args, **kwargs):
+        return FakeResponse("<think>private reasoning that should not be returned</think>\nFinal forecast explanation.")
+
+
 def test_vllm_client_explanation_falls_back_when_endpoint_unavailable():
     client = VLLMCompanionClient(
         LLMSettings(base_url="http://vllm.example/v1", model_name="test-model"),
@@ -62,3 +67,15 @@ def test_vllm_client_extracts_structured_features_from_json_response():
     assert result["features"]["signals"] == ["promo"]
     assert result["features"]["constraints"] == ["inventory"]
 
+
+def test_vllm_client_strips_reasoning_markup_from_model_text():
+    client = VLLMCompanionClient(
+        LLMSettings(base_url="http://vllm.example/v1", model_name="test-model"),
+        http_client=ThinkingAsyncClient(),
+    )
+    result = asyncio.run(client.generate_explanation({"summary": {"trend_direction": "flat"}}))
+
+    assert result["available"] is True
+    assert result["text"] == "Final forecast explanation."
+    assert "<think>" not in result["text"]
+    assert "private reasoning" not in result["text"]

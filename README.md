@@ -140,6 +140,35 @@ curl --noproxy '*' -sS -i \
   -F "notes=Promotion starts next week and inventory is constrained."
 ```
 
+For terminal-friendly output, request Markdown instead of the full JSON payload:
+
+```bash
+curl --noproxy '*' -sS \
+  -X POST http://<orchestrator-public-ip>:8080/predict/csv \
+  -F "file=@demand.csv" \
+  -F "date_column=date" \
+  -F "target_column=demand" \
+  -F "series_id=store-42-demand" \
+  -F "prediction_length=6" \
+  -F "notes=Promotion starts next week and inventory is constrained." \
+  -F "response_format=markdown"
+```
+
+To download an enriched CSV directly, use:
+
+```bash
+curl --noproxy '*' -sS \
+  -X POST http://<orchestrator-public-ip>:8080/predict/csv \
+  -F "file=@demand.csv" \
+  -F "date_column=date" \
+  -F "target_column=demand" \
+  -F "series_id=store-42-demand" \
+  -F "prediction_length=6" \
+  -F "notes=Promotion starts next week and inventory is constrained." \
+  -F "response_format=csv" \
+  -o forecast_enriched.csv
+```
+
 The numeric forecast still uses the target history. Extra CSV columns are treated as covariate/context fields for validation, metadata, and vLLM explanation context.
 
 All prediction responses include a `presentation` object with:

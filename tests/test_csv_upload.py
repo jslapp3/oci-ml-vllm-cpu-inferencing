@@ -134,6 +134,63 @@ def test_predict_csv_upload_returns_pretty_response_and_enriched_csv():
     assert "Promo lift and constrained inventory" in presentation["enriched_csv"]
 
 
+def test_predict_csv_upload_can_return_markdown_report():
+    app = create_app(
+        ml_client=RecordingMLClient(),
+        llm_client=RecordingLLMClient(),
+        db_writer=NoopDBWriter(),
+    )
+    client = TestClient(app)
+    csv_text = "date,demand\n2026-07-01,120\n2026-07-02,127\n2026-07-03,131\n"
+
+    response = client.post(
+        "/predict/csv",
+        data={
+            "series_id": "store-42-demand",
+            "date_column": "date",
+            "target_column": "demand",
+            "prediction_length": "1",
+            "response_format": "markdown",
+        },
+        files={"file": ("demand.csv", csv_text, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert "# Forecast Report" in response.text
+    assert "* 2026-07-04: 140 (range 130 to 150)" in response.text
+    assert "Explanation" in response.text
+    assert "Promo lift" in response.text
+
+
+def test_predict_csv_upload_can_return_enriched_csv_directly():
+    app = create_app(
+        ml_client=RecordingMLClient(),
+        llm_client=RecordingLLMClient(),
+        db_writer=NoopDBWriter(),
+    )
+    client = TestClient(app)
+    csv_text = "date,demand\n2026-07-01,120\n2026-07-02,127\n2026-07-03,131\n"
+
+    response = client.post(
+        "/predict/csv",
+        data={
+            "series_id": "store-42-demand",
+            "date_column": "date",
+            "target_column": "demand",
+            "prediction_length": "1",
+            "response_format": "csv",
+        },
+        files={"file": ("demand.csv", csv_text, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.headers["content-disposition"] == 'attachment; filename="forecast_enriched.csv"'
+    assert "row_type,timestamp,actual_value" in response.text
+    assert "forecast,2026-07-04,,140,130,150" in response.text
+
+
 def test_predict_csv_rejects_missing_target_column():
     app = create_app(
         ml_client=RecordingMLClient(),
