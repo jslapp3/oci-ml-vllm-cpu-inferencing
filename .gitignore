@@ -13,3 +13,5 @@ build/
 *.egg-info/
 models/
 hf_cache/
+codex_oci_vllm_ml_project_prompt.txt
+session.md
