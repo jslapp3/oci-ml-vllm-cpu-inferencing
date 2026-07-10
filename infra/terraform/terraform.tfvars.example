@@ -1,0 +1,50 @@
+region              = "us-ashburn-1"
+compartment_ocid    = "ocid1.compartment.oc1..example"
+availability_domain = "EXAMPLE:US-ASHBURN-AD-1"
+
+# You can leave the provider auth values null if your local OCI CLI/profile
+# environment already supplies credentials to the Terraform OCI provider.
+tenancy_ocid     = null
+user_ocid        = null
+fingerprint      = null
+private_key_path = null
+
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+
+# Keep these narrow. For a personal MVP, use your current public IP /32.
+admin_cidr_blocks      = ["203.0.113.10/32"]
+public_api_cidr_blocks = ["203.0.113.10/32"]
+
+project_name        = "oci-vllm-ml-inference"
+vcn_cidr            = "10.0.0.0/16"
+public_subnet_cidr  = "10.0.0.0/24"
+private_subnet_cidr = "10.0.1.0/24"
+
+orchestrator_shape      = "VM.Standard.E6.Ax.Flex"
+orchestrator_ocpus      = 8
+orchestrator_memory_gbs = 64
+orchestrator_private_ip = "10.0.0.71"
+
+vllm_shape      = "VM.Standard.E6.Ax.Flex"
+vllm_ocpus      = 16
+vllm_memory_gbs = 128
+vllm_private_ip = "10.0.1.98"
+
+boot_volume_size_gbs = 200
+
+# Optional: set a known-good Oracle Linux image OCID for your region.
+image_id             = null
+oracle_linux_version = "9"
+
+# Use your actual Git remote when you want cloud-init to install the app.
+app_repo_url = "https://github.com/YOUR_ORG/oci-vllm-ml-inference.git"
+app_repo_ref = "main"
+
+chronos_load_public_model = true
+chronos_force_fallback    = false
+
+vllm_model                  = "Qwen/Qwen3-0.6B"
+vllm_api_key                = "replace-with-random-token"
+hf_token                    = ""
+vllm_timeout_seconds        = 60
+vllm_cpu_kvcache_space_gbs  = 16

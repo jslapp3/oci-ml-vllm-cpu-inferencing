@@ -1,0 +1,78 @@
+#cloud-config
+package_update: true
+
+write_files:
+  - path: /root/bootstrap-vllm-cpu.sh
+    permissions: "0750"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+
+      dnf install -y git curl jq findutils which procps-ng tar gcc gcc-c++ make numactl numactl-libs openssl firewalld
+
+      systemctl enable --now firewalld
+      firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="${orchestrator_private_cidr}" port protocol="tcp" port="8000" accept' || true
+      firewall-cmd --reload || true
+
+      mkdir -p /opt/vllm /etc/vllm /var/cache/huggingface /opt/uv-python
+      chown -R opc:opc /opt/vllm /var/cache/huggingface /opt/uv-python
+
+      sudo -u opc bash -lc '
+        set -euxo pipefail
+        export PATH="$HOME/.local/bin:$PATH"
+        export UV_PYTHON_INSTALL_DIR=/opt/uv-python
+
+        if ! command -v uv >/dev/null 2>&1; then
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+        fi
+
+        cd /opt/vllm
+        uv python install 3.12
+        uv venv --python 3.12 --seed --managed-python
+        source .venv/bin/activate
+
+        VLLM_VERSION=$(curl -s https://api.github.com/repos/vllm-project/vllm/releases/latest | jq -r .tag_name | sed "s/^v//")
+        uv pip install "vllm[zen]" --extra-index-url "https://wheels.vllm.ai/$${VLLM_VERSION}/cpu" --index-strategy first-index --torch-backend cpu
+      '
+
+      chcon -R -t bin_t /opt/vllm/.venv/bin /opt/uv-python || true
+
+      cat >/etc/vllm/vllm.env <<'ENVEOF'
+      VLLM_MODEL=${vllm_model}
+      VLLM_API_KEY=${vllm_api_key}
+      HF_HOME=/var/cache/huggingface
+      HF_TOKEN=${hf_token}
+      VLLM_CPU_KVCACHE_SPACE=${vllm_cpu_kvcache_space}
+      VLLM_CPU_NUM_OF_RESERVED_CPU=1
+      ENVEOF
+
+      chown root:opc /etc/vllm/vllm.env
+      chmod 640 /etc/vllm/vllm.env
+
+      cat >/etc/systemd/system/vllm-openai.service <<'SERVICEEOF'
+      [Unit]
+      Description=vLLM OpenAI-Compatible CPU Server
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      User=opc
+      Group=opc
+      WorkingDirectory=/opt/vllm
+      EnvironmentFile=/etc/vllm/vllm.env
+      ExecStart=/opt/vllm/.venv/bin/vllm serve $${VLLM_MODEL} --host 0.0.0.0 --port 8000 --api-key $${VLLM_API_KEY} --dtype bfloat16
+      Restart=always
+      RestartSec=10
+      LimitNOFILE=65535
+
+      [Install]
+      WantedBy=multi-user.target
+      SERVICEEOF
+
+      systemctl daemon-reload
+      systemctl enable --now vllm-openai.service
+
+runcmd:
+  - [bash, /root/bootstrap-vllm-cpu.sh]

@@ -1,0 +1,67 @@
+#cloud-config
+package_update: true
+
+write_files:
+  - path: /root/bootstrap-orchestrator.sh
+    permissions: "0750"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+
+      APP_REPO_URL="${app_repo_url}"
+      APP_REPO_REF="${app_repo_ref}"
+      APP_DIR="/opt/oci-vllm-ml-inference"
+
+      dnf install -y git python3 python3-pip python3-devel gcc gcc-c++ make firewalld
+
+      systemctl enable --now firewalld
+      firewall-cmd --permanent --add-port=8080/tcp || true
+      firewall-cmd --reload || true
+
+      if [[ -z "$APP_REPO_URL" ]]; then
+        echo "app_repo_url is empty; infrastructure provisioned without app install."
+        exit 0
+      fi
+
+      rm -rf /tmp/oci-vllm-ml-inference
+      git clone "$APP_REPO_URL" /tmp/oci-vllm-ml-inference
+      cd /tmp/oci-vllm-ml-inference
+      git checkout "$APP_REPO_REF"
+
+      chmod +x deploy/install_compute_venv.sh
+      deploy/install_compute_venv.sh
+
+      cat >/etc/oci-forecast/forecast.env <<'ENVEOF'
+      ML_SERVICE_PORT=8081
+      ORCHESTRATOR_PORT=8080
+      CHRONOS_MODEL_NAME=amazon/chronos-t5-small
+      CHRONOS_MODEL_REVISION=
+      CHRONOS_MODEL_SOURCE_URL=https://huggingface.co/amazon/chronos-t5-small
+      CHRONOS_DEVICE=cpu
+      CHRONOS_NUM_SAMPLES=100
+      MAX_PREDICTION_LENGTH=96
+      ML_LOAD_PUBLIC_MODEL=${chronos_load_public_model}
+      ML_FORCE_FALLBACK=${chronos_force_fallback}
+      ML_SERVICE_BASE_URL=http://127.0.0.1:8081
+      ML_SERVICE_TIMEOUT_SECONDS=20
+      VLLM_BASE_URL=${vllm_base_url}
+      VLLM_MODEL=${vllm_model}
+      VLLM_API_KEY=${vllm_api_key}
+      VLLM_TIMEOUT_SECONDS=${vllm_timeout_seconds}
+      VLLM_TEMPERATURE=0.2
+      VLLM_MAX_TOKENS=500
+      DB_WRITE_ENABLED=false
+      ORACLE_USER=
+      ORACLE_PASSWORD=
+      ORACLE_DSN=
+      ENVEOF
+
+      chown root:oci-forecast /etc/oci-forecast/forecast.env
+      chmod 640 /etc/oci-forecast/forecast.env
+
+      systemctl restart chronos-ml.service
+      systemctl restart forecast-orchestrator.service
+
+runcmd:
+  - [bash, /root/bootstrap-orchestrator.sh]
