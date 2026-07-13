@@ -16,9 +16,28 @@ def test_force_fallback_records_model_loading_reason():
     )
 
     assert response.engine == "fallback"
+    assert response.model_family == "fallback"
     assert response.loaded_public_model is False
     assert "ML_FORCE_FALLBACK" in response.warnings[0]
     assert service.health()["load_error"] == "ML_FORCE_FALLBACK is enabled"
+
+
+def test_fallback_explicitly_ignores_covariates():
+    service = ForecastingService(MLSettings(force_fallback=True))
+    response = service.predict(
+        ForecastRequest(
+            values=[20, 18, 17],
+            prediction_length=2,
+            past_covariates={"promotion": [0, 0, 1]},
+            future_covariates={"promotion": [1, 1]},
+        )
+    )
+
+    assert response.engine == "fallback"
+    assert response.model_family == "fallback"
+    assert response.covariates_used.past == []
+    assert response.covariates_used.future == []
+    assert any("deterministic fallback" in warning for warning in response.warnings)
 
 
 def test_prediction_length_limit_is_enforced():
@@ -58,4 +77,3 @@ def test_normalized_output_mapping_has_expected_bounds():
         "recent_volatility",
         "latest_level_shift",
     }
-

@@ -20,7 +20,7 @@ class OrchestratorSettings:
         default_factory=lambda: os.getenv("ML_SERVICE_BASE_URL", "http://127.0.0.1:8081")
     )
     ml_service_timeout_seconds: float = field(
-        default_factory=lambda: float(os.getenv("ML_SERVICE_TIMEOUT_SECONDS", "20"))
+        default_factory=lambda: float(os.getenv("ML_SERVICE_TIMEOUT_SECONDS", "30"))
     )
     db_enabled: bool = field(default_factory=lambda: _bool_env("DB_WRITE_ENABLED", False))
     oracle_user: Optional[str] = field(default_factory=lambda: os.getenv("ORACLE_USER") or None)

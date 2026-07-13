@@ -4,7 +4,7 @@
 
 The MVP runtime target is OCI Compute on an E6 AX shape using Python virtual environments and systemd services.
 
-The Chronos ML service can plausibly run on CPU for prototype inference. Start with fallback mode first, then enable real Chronos loading and measure cold-load time, memory, disk, and p95 latency.
+The pinned `autogluon/chronos-2-small` checkpoint runs in CPU float32 and preloads at service startup. The original `amazon/chronos-t5-small` adapter remains deployed for environment-only rollback. Do not enable Chronos-2 clients until cold-load time, memory, disk use, forecast quality, and warm p95 latency are measured on the existing host.
 
 The selected model is a forecasting transformer, not a classical scikit-learn model. It is still served outside vLLM because vLLM is optimized for LLM text generation and embeddings, not arbitrary forecasting pipelines.
 
@@ -15,6 +15,8 @@ The MVP uses:
 - `requirements-ml.txt` for the Chronos ML service.
 - `requirements-orchestrator.txt` for the orchestration API.
 - Separate virtual environments under `/opt/oci-vllm-ml-inference`.
+- `chronos-forecasting==2.3.1` and the pinned Chronos-2 checkpoint revision.
+- `/opt/oci-vllm-ml-inference/hf_cache`, preserved by the installer, rather than a temporary model cache.
 
 This avoids container and registry work while still isolating the heavy ML dependencies from the lighter orchestrator service.
 
@@ -62,8 +64,23 @@ Choose systemd-on-Compute when you need the simplest MVP path with direct contro
 - Start with one Compute instance for MVP.
 - Move the ML service and orchestrator to separate Compute instances if resource contention appears.
 - Use a Load Balancer across multiple orchestrator hosts for horizontal scale.
-- Cap `prediction_length` and `CHRONOS_NUM_SAMPLES` to protect CPU capacity.
+- Keep `MAX_PREDICTION_LENGTH=96` for both adapters. `CHRONOS_NUM_SAMPLES` is deprecated and protects capacity only when the original Chronos rollback adapter is selected.
 - Consider OCI Data Science Model Deployment, OKE, or image-based deployment when single-host systemd is no longer enough.
+
+## Chronos-2 Acceptance Record
+
+Record weighted quantile loss and MASE for original Chronos and Chronos-2 on representative holdout windows, including at least one covariate-bearing dataset. Record the dataset/window definition and settings with each result.
+
+The existing 8-OCPU E6 AX host must pass all gates before clients send covariates:
+
+- no deterministic fallback across 20 consecutive smoke requests;
+- warm p95 inference below 20 seconds;
+- preload/health readiness within the 300-second startup ceiling;
+- peak ML-service RSS below 8 GB;
+- finite, nondecreasing requested quantiles at the exact requested horizon;
+- correct historical and future names in `covariates_used`.
+
+Do not increase the shape or maximum horizon to pass the initial migration. Exact staged deployment and environment-only rollback commands are in [compute_venv_deployment.md](compute_venv_deployment.md).
 
 ## Autonomous Database
 
@@ -72,4 +89,3 @@ The `db/schema.sql` file creates normalized tables for run logs, forecast points
 ## APEX And Oracle Analytics Cloud
 
 APEX can call the orchestrator API through OCI API Gateway or Load Balancer. Oracle Analytics Cloud can query the ADB logging tables and `latest_successful_inference_v` for dashboards once inference logs are persisted.
-

@@ -33,8 +33,12 @@ fi
 
 systemctl stop forecast-orchestrator.service chronos-ml.service >/dev/null 2>&1 || true
 
-rm -rf "$APP_DIR"
-mkdir -p "$APP_DIR" "$ENV_DIR"
+if [[ -d "$APP_DIR/hf_cache" ]]; then
+  find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name 'hf_cache' -exec rm -rf -- {} +
+else
+  rm -rf "$APP_DIR"
+fi
+mkdir -p "$APP_DIR/hf_cache" "$ENV_DIR"
 
 echo "Copying application files to ${APP_DIR}"
 tar \
@@ -45,13 +49,14 @@ tar \
   --exclude='*.pyc' \
   --exclude='.venv' \
   --exclude='.venv-*' \
+  --exclude='hf_cache' \
   --exclude='deploy/*.env' \
   -C "$SOURCE_DIR" \
   -cf - . | tar -C "$APP_DIR" -xf -
 
 if [[ ! -f "$ENV_FILE" ]]; then
   install -m 0600 "$APP_DIR/deploy/compute.env.example" "$ENV_FILE"
-  echo "Created ${ENV_FILE}; edit it before enabling real Chronos or ADB credentials."
+  echo "Created ${ENV_FILE} with pinned Chronos-2 defaults; review it before starting services."
 else
   echo "${ENV_FILE} already exists; leaving it unchanged."
 fi

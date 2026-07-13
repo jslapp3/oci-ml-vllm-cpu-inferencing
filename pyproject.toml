@@ -1,4 +1,6 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-
+markers = [
+    "integration: opt-in tests that may download pinned model weights",
+]

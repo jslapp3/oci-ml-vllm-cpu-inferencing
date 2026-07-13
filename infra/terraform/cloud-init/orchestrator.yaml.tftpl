@@ -35,16 +35,18 @@ write_files:
       cat >/etc/oci-forecast/forecast.env <<'ENVEOF'
       ML_SERVICE_PORT=8081
       ORCHESTRATOR_PORT=8080
-      CHRONOS_MODEL_NAME=amazon/chronos-t5-small
-      CHRONOS_MODEL_REVISION=
-      CHRONOS_MODEL_SOURCE_URL=https://huggingface.co/amazon/chronos-t5-small
+      CHRONOS_MODEL_NAME=autogluon/chronos-2-small
+      CHRONOS_MODEL_REVISION=ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a
+      CHRONOS_MODEL_SOURCE_URL=https://huggingface.co/autogluon/chronos-2-small
       CHRONOS_DEVICE=cpu
       CHRONOS_NUM_SAMPLES=100
       MAX_PREDICTION_LENGTH=96
+      ML_PRELOAD_MODEL=true
+      HF_HOME=/opt/oci-vllm-ml-inference/hf_cache
       ML_LOAD_PUBLIC_MODEL=${chronos_load_public_model}
       ML_FORCE_FALLBACK=${chronos_force_fallback}
       ML_SERVICE_BASE_URL=http://127.0.0.1:8081
-      ML_SERVICE_TIMEOUT_SECONDS=20
+      ML_SERVICE_TIMEOUT_SECONDS=30
       VLLM_BASE_URL=${vllm_base_url}
       VLLM_MODEL=${vllm_model}
       VLLM_API_KEY=${vllm_api_key}

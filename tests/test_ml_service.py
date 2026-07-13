@@ -24,8 +24,10 @@ def test_forecast_response_shape_uses_fallback_when_public_model_disabled():
     response = service.predict(request)
 
     assert response.series_id == "series-a"
-    assert response.model_name == "amazon/chronos-t5-small"
+    assert response.model_name == "autogluon/chronos-2-small"
     assert response.engine == "fallback"
+    assert response.model_family == "fallback"
+    assert response.covariates_used.past == []
     assert response.loaded_public_model is False
     assert len(response.horizon) == 4
     assert response.horizon[0].timestamp == "2026-07-05"
@@ -57,4 +59,3 @@ def test_fastapi_predict_endpoint_returns_forecast():
     assert body["engine"] == "fallback"
     assert len(body["horizon"]) == 2
     assert body["summary"]["trend_direction"] in {"up", "down", "flat"}
-

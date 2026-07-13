@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, root_validator, validator
 
+from forecast_contract import CovariateMap, validate_forecast_contract
+
 
 class ForecastRequest(BaseModel):
     series_id: str = Field(default="default", min_length=1)
@@ -13,6 +15,9 @@ class ForecastRequest(BaseModel):
     timestamps: Optional[List[str]] = None
     prediction_length: int = Field(default=12, ge=1)
     quantile_levels: List[float] = Field(default_factory=lambda: [0.1, 0.5, 0.9])
+    past_covariates: Optional[CovariateMap] = None
+    future_covariates: Optional[CovariateMap] = None
+    future_timestamps: Optional[List[str]] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @validator("values")
@@ -32,13 +37,8 @@ class ForecastRequest(BaseModel):
         return levels
 
     @root_validator(skip_on_failure=True)
-    def timestamps_match_values(cls, model_values: Dict[str, Any]) -> Dict[str, Any]:
-        timestamps = model_values.get("timestamps")
-        series_values = model_values.get("values")
-        if timestamps is not None and series_values is not None:
-            if len(timestamps) != len(series_values):
-                raise ValueError("timestamps length must match values length")
-        return model_values
+    def aligned_forecast_inputs(cls, model_values: Dict[str, Any]) -> Dict[str, Any]:
+        return validate_forecast_contract(model_values)
 
 
 class ForecastPoint(BaseModel):
@@ -69,6 +69,11 @@ class ForecastSummary(BaseModel):
     confidence: float
 
 
+class CovariatesUsed(BaseModel):
+    past: List[str] = Field(default_factory=list)
+    future: List[str] = Field(default_factory=list)
+
+
 class ForecastResponse(BaseModel):
     prediction_id: str
     series_id: str
@@ -76,6 +81,8 @@ class ForecastResponse(BaseModel):
     model_source: str
     model_version: Optional[str] = None
     engine: str
+    model_family: str
+    covariates_used: CovariatesUsed = Field(default_factory=CovariatesUsed)
     loaded_public_model: bool
     inference_timestamp: str
     prediction_length: int

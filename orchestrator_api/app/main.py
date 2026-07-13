@@ -65,6 +65,7 @@ def create_app(
                 filename=file.filename,
                 date_column=date_column,
                 target_column=target_column,
+                prediction_length=prediction_length,
             )
             request = PredictionRequest(
                 series_id=series_id,
@@ -72,6 +73,9 @@ def create_app(
                 values=csv_data.values,
                 prediction_length=prediction_length,
                 quantile_levels=parse_quantile_levels(quantile_levels),
+                past_covariates=csv_data.past_covariates or None,
+                future_covariates=csv_data.future_covariates or None,
+                future_timestamps=csv_data.future_timestamps or None,
                 notes=csv_context_notes(notes, csv_data),
                 metadata=csv_data.metadata(),
             )

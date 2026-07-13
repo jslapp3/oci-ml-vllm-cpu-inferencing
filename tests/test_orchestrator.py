@@ -10,12 +10,17 @@ class FakeMLClient:
     async def predict(self, payload):
         assert payload["series_id"] == "demo-series"
         assert "notes" not in payload
+        assert payload["past_covariates"] == {"promotion": [False, False, True]}
+        assert payload["future_covariates"] == {"promotion": [True, True]}
+        assert payload["future_timestamps"] == ["2026-07-04", "2026-07-05"]
         return {
             "prediction_id": "prediction-1",
             "series_id": payload["series_id"],
             "model_name": "amazon/chronos-t5-small",
             "model_source": "https://huggingface.co/amazon/chronos-t5-small",
             "engine": "fallback",
+            "model_family": "fallback",
+            "covariates_used": {"past": [], "future": []},
             "loaded_public_model": False,
             "inference_timestamp": "2026-07-09T00:00:00+00:00",
             "prediction_length": payload["prediction_length"],
@@ -88,6 +93,9 @@ def test_orchestrator_combines_ml_llm_and_db_results():
             "series_id": "demo-series",
             "values": [100, 102, 108],
             "prediction_length": 2,
+            "past_covariates": {"promotion": [False, False, True]},
+            "future_covariates": {"promotion": [True, True]},
+            "future_timestamps": ["2026-07-04", "2026-07-05"],
             "notes": "Promotion starts tomorrow.",
         },
     )

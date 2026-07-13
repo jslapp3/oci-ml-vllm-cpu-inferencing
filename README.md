@@ -2,7 +2,9 @@
 
 MVP OCI inference scaffold using a public pretrained forecasting model, two Python services on OCI Compute, and a vLLM companion endpoint.
 
-Selected non-vLLM model: `amazon/chronos-t5-small`.
+Selected non-vLLM model: `autogluon/chronos-2-small`, pinned to revision
+`ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a` with `chronos-forecasting==2.3.1`.
+The original `amazon/chronos-t5-small` adapter remains available as an environment-only rollback path.
 
 The forecasting model is served separately from vLLM. Chronos handles numeric time-series forecasting; vLLM handles explanation text, recommendations, and optional text-derived features around the forecast.
 
@@ -39,7 +41,7 @@ The two FastAPI apps run as regular Linux services:
 
 ## OCI Compute Deployment
 
-Full deployment instructions are in [deploy/compute_venv_deployment.md](deploy/compute_venv_deployment.md).
+Full deployment instructions are in [deploy/compute_venv_deployment.md](deploy/compute_venv_deployment.md). For upgrading an existing OCI host to Chronos-2, use the focused [OCI Chronos-2 upgrade guide](docs/oci_chronos_2_upgrade_guide.md).
 
 On the OCI Compute instance:
 
@@ -55,22 +57,25 @@ The installer:
 - Copies the app to `/opt/oci-vllm-ml-inference`
 - Creates `/opt/oci-vllm-ml-inference/.venv-ml`
 - Creates `/opt/oci-vllm-ml-inference/.venv-orchestrator`
+- Creates and preserves `/opt/oci-vllm-ml-inference/hf_cache`
 - Copies systemd unit files
 - Creates `/etc/oci-forecast/forecast.env` if it does not exist
 - Enables both services
 
-For first smoke tests, the env template defaults to fallback mode:
+New installations default to pinned Chronos-2 with startup preload:
 
 ```text
-ML_LOAD_PUBLIC_MODEL=false
-ML_FORCE_FALLBACK=true
-```
-
-For real Chronos inference, edit `/etc/oci-forecast/forecast.env`:
-
-```text
+CHRONOS_MODEL_NAME=autogluon/chronos-2-small
+CHRONOS_MODEL_REVISION=ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a
 ML_LOAD_PUBLIC_MODEL=true
 ML_FORCE_FALLBACK=false
+ML_PRELOAD_MODEL=true
+```
+
+Use deterministic fallback only for diagnostics:
+
+```text
+ML_FORCE_FALLBACK=true
 ```
 
 Then start:
@@ -98,6 +103,18 @@ curl -X POST http://127.0.0.1:8080/predict \
     "timestamps": ["2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04"],
     "values": [120, 127, 131, 138],
     "prediction_length": 6,
+    "past_covariates": {
+      "promotion": [0, 0, 0, 1],
+      "region": ["north", "north", "north", "north"]
+    },
+    "future_covariates": {
+      "promotion": [1, 1, 1, 0, 0, 0],
+      "region": ["north", "north", "north", "north", "north", "north"]
+    },
+    "future_timestamps": [
+      "2026-07-05", "2026-07-06", "2026-07-07",
+      "2026-07-08", "2026-07-09", "2026-07-10"
+    ],
     "notes": "Promotion starts next week and inventory is constrained.",
     "metadata": {"domain": "demand"}
   }'
@@ -125,6 +142,8 @@ date,demand,promo_flag,inventory
 2026-07-01,120,0,450
 2026-07-02,127,0,430
 2026-07-03,131,1,410
+2026-07-04,,1,400
+2026-07-05,,0,390
 ```
 
 From a laptop:
@@ -136,7 +155,7 @@ curl --noproxy '*' -sS -i \
   -F "date_column=date" \
   -F "target_column=demand" \
   -F "series_id=store-42-demand" \
-  -F "prediction_length=6" \
+  -F "prediction_length=2" \
   -F "notes=Promotion starts next week and inventory is constrained."
 ```
 
@@ -149,7 +168,7 @@ curl --noproxy '*' -sS \
   -F "date_column=date" \
   -F "target_column=demand" \
   -F "series_id=store-42-demand" \
-  -F "prediction_length=6" \
+  -F "prediction_length=2" \
   -F "notes=Promotion starts next week and inventory is constrained." \
   -F "response_format=markdown"
 ```
@@ -163,13 +182,15 @@ curl --noproxy '*' -sS \
   -F "date_column=date" \
   -F "target_column=demand" \
   -F "series_id=store-42-demand" \
-  -F "prediction_length=6" \
+  -F "prediction_length=2" \
   -F "notes=Promotion starts next week and inventory is constrained." \
   -F "response_format=csv" \
   -o forecast_enriched.csv
 ```
 
-The numeric forecast still uses the target history. Extra CSV columns are treated as covariate/context fields for validation, metadata, and vLLM explanation context.
+Complete non-date/non-target columns are sent to Chronos-2 as historical covariates. A contiguous suffix of blank-target rows must equal `prediction_length`; complete columns in that suffix become known-future covariates. Historically incomplete columns are excluded from model input with a warning but remain in metadata, LLM context, and enriched CSV output. Columns that are complete in history but incomplete in future remain past-only.
+
+ML responses keep `engine="chronos"` for either real Chronos family and add `model_family` plus `covariates_used`. Deterministic fallback keeps `engine="fallback"`, reports `model_family="fallback"`, ignores covariates, and emits an explicit warning. `drivers` remain inexpensive heuristics based on the target history, not Chronos-2 feature attribution.
 
 All prediction responses include a `presentation` object with:
 
@@ -199,4 +220,11 @@ python3 -m pip install -r requirements-dev.txt
 python3 -m pytest
 ```
 
-The tests do not download Chronos. They exercise fallback behavior, response shape, vLLM fallback, orchestration, and disabled DB writes.
+The ordinary suite uses fake pipelines and does not download model weights. The pinned CPU checkpoint smoke test is separately marked and opt-in:
+
+```bash
+python3 -m pip install -r requirements-dev.txt -r requirements-ml.txt
+RUN_CHRONOS_INTEGRATION=1 python3 -m pytest -m integration tests/test_chronos_integration.py
+```
+
+Run that integration test, backtests, and the E6 AX acceptance gates only during an intentional deployment validation. Record them in [docs/chronos_2_validation.md](docs/chronos_2_validation.md). See [deploy/compute_venv_deployment.md](deploy/compute_venv_deployment.md) for staged rollout and exact rollback instructions.

@@ -6,10 +6,11 @@ import math
 import statistics
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Iterable, List, Optional, Sequence
+from typing import Any, Iterable, List, Optional, Sequence, Tuple
 
 from .config import MLSettings, get_settings
 from .schemas import (
+    CovariatesUsed,
     DriverContribution,
     ForecastPoint,
     ForecastRequest,
@@ -19,13 +20,23 @@ from .schemas import (
 
 
 class ForecastingService:
-    """Lazy-loads Chronos and falls back to a deterministic trend model."""
+    """Loads either Chronos family and falls back to a deterministic trend model."""
 
-    def __init__(self, settings: Optional[MLSettings] = None):
+    def __init__(
+        self,
+        settings: Optional[MLSettings] = None,
+        pipeline: Any = None,
+        pipeline_family: Optional[str] = None,
+    ):
         self.settings = settings or get_settings()
-        self._pipeline = None
-        self._load_attempted = False
+        self._pipeline = pipeline
+        self._pipeline_family = pipeline_family or (
+            _detect_pipeline_family(pipeline) if pipeline is not None else None
+        )
+        self._load_attempted = pipeline is not None
         self._load_error: Optional[str] = None
+        self._preload_attempted = False
+        self._preload_succeeded = False
 
     @property
     def loaded_public_model(self) -> bool:
@@ -35,13 +46,29 @@ class ForecastingService:
     def load_error(self) -> Optional[str]:
         return self._load_error
 
+    @property
+    def model_family(self) -> str:
+        return self._pipeline_family or _configured_model_family(self.settings.model_name)
+
+    def preload(self) -> bool:
+        """Load the configured checkpoint before the service accepts requests."""
+
+        self._preload_attempted = True
+        self._preload_succeeded = self._load_pipeline() is not None
+        return self._preload_succeeded
+
     def health(self) -> dict:
         return {
             "status": "ok",
             "model_name": self.settings.model_name,
             "model_source": self.settings.model_source_url,
+            "model_revision": self.settings.model_revision,
+            "model_family": self.model_family,
             "load_public_model": self.settings.load_public_model,
             "force_fallback": self.settings.force_fallback,
+            "preload_model": self.settings.preload_model,
+            "preload_attempted": self._preload_attempted,
+            "preload_succeeded": self._preload_succeeded,
             "model_load_attempted": self._load_attempted,
             "loaded_public_model": self.loaded_public_model,
             "load_error": self._load_error,
@@ -54,23 +81,43 @@ class ForecastingService:
             )
 
         quantile_levels = _normalize_quantile_levels(request.quantile_levels)
-        warnings: List[str] = []
+        warnings = _timestamp_alignment_warnings(request)
         inference_time = datetime.now(timezone.utc)
         engine = "chronos"
+        model_family = "fallback"
+        covariates_used = CovariatesUsed()
 
         pipeline = self._load_pipeline()
         if pipeline is not None:
             try:
-                horizon = self._predict_with_chronos(request, quantile_levels)
+                pipeline_family = self._pipeline_family or _detect_pipeline_family(pipeline)
+                if pipeline_family == "chronos2":
+                    horizon = self._predict_with_chronos2(request, quantile_levels)
+                    model_family = "chronos2"
+                    covariates_used = CovariatesUsed(
+                        past=sorted((request.past_covariates or {}).keys()),
+                        future=sorted((request.future_covariates or {}).keys()),
+                    )
+                else:
+                    horizon = self._predict_with_legacy_chronos(request, quantile_levels)
+                    model_family = "chronos"
+                    if _has_covariates(request):
+                        warnings.append(
+                            "Covariates were ignored because the legacy Chronos adapter does not support covariates."
+                        )
             except Exception as exc:  # pragma: no cover - exercised only with Chronos installed
                 warnings.append(f"Chronos inference failed; used fallback. Cause: {type(exc).__name__}: {exc}")
                 horizon = self._fallback_forecast(request, quantile_levels)
                 engine = "fallback"
+                model_family = "fallback"
+                covariates_used = CovariatesUsed()
+                _append_fallback_covariate_warning(request, warnings)
         else:
             if self._load_error:
                 warnings.append(f"Chronos model unavailable; used fallback. Cause: {self._load_error}")
             horizon = self._fallback_forecast(request, quantile_levels)
             engine = "fallback"
+            _append_fallback_covariate_warning(request, warnings)
 
         summary = _summarize_forecast(request.values, horizon)
         drivers = _build_driver_contributions(request.values, summary)
@@ -81,6 +128,8 @@ class ForecastingService:
             model_source=self.settings.model_source_url,
             model_version=self.settings.model_revision,
             engine=engine,
+            model_family=model_family,
+            covariates_used=covariates_used,
             loaded_public_model=self.loaded_public_model,
             inference_timestamp=inference_time.isoformat(),
             prediction_length=request.prediction_length,
@@ -92,6 +141,8 @@ class ForecastingService:
 
     def _load_pipeline(self):
         if self._pipeline is not None:
+            if self._pipeline_family is None:
+                self._pipeline_family = _detect_pipeline_family(self._pipeline)
             return self._pipeline
         if self.settings.force_fallback:
             self._load_error = "ML_FORCE_FALLBACK is enabled"
@@ -105,19 +156,17 @@ class ForecastingService:
         self._load_attempted = True
         try:
             import torch
-
-            try:
-                from chronos import ChronosPipeline as PipelineClass
-            except ImportError:  # pragma: no cover - depends on installed chronos version
-                from chronos import BaseChronosPipeline as PipelineClass
+            from chronos import BaseChronosPipeline
 
             kwargs = {
                 "device_map": self.settings.device,
                 "torch_dtype": torch.float32,
+                "cache_dir": self.settings.hf_home,
             }
             if self.settings.model_revision:
                 kwargs["revision"] = self.settings.model_revision
-            self._pipeline = PipelineClass.from_pretrained(self.settings.model_name, **kwargs)
+            self._pipeline = BaseChronosPipeline.from_pretrained(self.settings.model_name, **kwargs)
+            self._pipeline_family = _detect_pipeline_family(self._pipeline)
             self._load_error = None
             return self._pipeline
         except Exception as exc:
@@ -125,7 +174,31 @@ class ForecastingService:
             self._pipeline = None
             return None
 
-    def _predict_with_chronos(
+    def _predict_with_chronos2(
+        self,
+        request: ForecastRequest,
+        quantile_levels: Sequence[float],
+    ) -> List[ForecastPoint]:
+        context_df, future_df, id_column, timestamp_column, target_column = _chronos2_dataframes(request)
+        forecast_df = self._pipeline.predict_df(
+            df=context_df,
+            future_df=future_df,
+            id_column=id_column,
+            timestamp_column=timestamp_column,
+            target=target_column,
+            prediction_length=request.prediction_length,
+            quantile_levels=list(quantile_levels),
+            freq="D",
+        )
+        return _points_from_chronos2_dataframe(
+            forecast_df=forecast_df,
+            quantile_levels=quantile_levels,
+            prediction_length=request.prediction_length,
+            timestamps=_response_timestamps(request),
+            target_column=target_column,
+        )
+
+    def _predict_with_legacy_chronos(
         self,
         request: ForecastRequest,
         quantile_levels: Sequence[float],
@@ -156,7 +229,7 @@ class ForecastingService:
         return _points_from_quantiles(
             quantile_levels=quantile_levels,
             quantile_values=quantile_values.tolist(),
-            timestamps=_future_timestamps(request.timestamps, request.prediction_length),
+            timestamps=_response_timestamps(request),
         )
 
     def _fallback_forecast(
@@ -173,7 +246,7 @@ class ForecastingService:
         baseline_scale = max(abs(last_value), abs(statistics.fmean(values[-min(6, len(values)) :])), 1.0)
         base_spread = max(volatility, baseline_scale * 0.04)
 
-        timestamps = _future_timestamps(request.timestamps, request.prediction_length)
+        timestamps = _response_timestamps(request)
         points: List[ForecastPoint] = []
         for step in range(1, request.prediction_length + 1):
             damped_slope = slope * (0.92 ** (step - 1))
@@ -184,8 +257,8 @@ class ForecastingService:
                 for level in quantile_levels
             }
             median_value = quantiles.get("q50", round(median, 6))
-            lower = min(value for key, value in quantiles.items() if key != "q50") if len(quantiles) > 1 else median_value
-            upper = max(value for key, value in quantiles.items() if key != "q50") if len(quantiles) > 1 else median_value
+            lower = min(quantiles.values())
+            upper = max(quantiles.values())
             points.append(
                 ForecastPoint(
                     step=step,
@@ -197,6 +270,115 @@ class ForecastingService:
                 )
             )
         return points
+
+
+def _detect_pipeline_family(pipeline: Any) -> str:
+    class_name = pipeline.__class__.__name__.lower()
+    if "chronos2" in class_name or "chronos_2" in class_name:
+        return "chronos2"
+    return "chronos"
+
+
+def _configured_model_family(model_name: str) -> str:
+    normalized = model_name.lower().replace("_", "-")
+    return "chronos2" if "chronos-2" in normalized else "chronos"
+
+
+def _has_covariates(request: ForecastRequest) -> bool:
+    return bool(request.past_covariates or request.future_covariates)
+
+
+def _append_fallback_covariate_warning(request: ForecastRequest, warnings: List[str]) -> None:
+    if _has_covariates(request):
+        warning = "Covariates were ignored because deterministic fallback does not support covariates."
+        if warning not in warnings:
+            warnings.append(warning)
+
+
+def _chronos2_dataframes(request: ForecastRequest) -> Tuple[Any, Optional[Any], str, str, str]:
+    import pandas as pd
+
+    history_length = len(request.values)
+    internal_timestamps = pd.date_range("2000-01-01", periods=history_length, freq="D")
+    covariate_names = set((request.past_covariates or {}).keys())
+    id_column, timestamp_column, target_column = _internal_column_names(covariate_names)
+    context_data = {
+        id_column: [request.series_id] * history_length,
+        timestamp_column: internal_timestamps,
+        target_column: list(request.values),
+    }
+    for name, values in (request.past_covariates or {}).items():
+        context_data[name] = list(values)
+    context_df = pd.DataFrame(context_data)
+
+    future_df = None
+    if request.future_covariates:
+        future_timestamps = pd.date_range(
+            internal_timestamps[-1] + pd.Timedelta(days=1),
+            periods=request.prediction_length,
+            freq="D",
+        )
+        future_data = {
+            id_column: [request.series_id] * request.prediction_length,
+            timestamp_column: future_timestamps,
+        }
+        for name, values in request.future_covariates.items():
+            future_data[name] = list(values)
+        future_df = pd.DataFrame(future_data)
+
+    return context_df, future_df, id_column, timestamp_column, target_column
+
+
+def _internal_column_names(covariate_names: set[str]) -> Tuple[str, str, str]:
+    used_names = set(covariate_names)
+
+    def unique_name(preferred: str) -> str:
+        candidate = preferred
+        suffix = 0
+        while candidate in used_names:
+            suffix += 1
+            candidate = f"__chronos_{preferred}_{suffix}"
+        used_names.add(candidate)
+        return candidate
+
+    return unique_name("item_id"), unique_name("timestamp"), unique_name("target")
+
+
+def _points_from_chronos2_dataframe(
+    forecast_df: Any,
+    quantile_levels: Sequence[float],
+    prediction_length: int,
+    timestamps: Sequence[Optional[str]],
+    target_column: str,
+) -> List[ForecastPoint]:
+    if "target_name" in forecast_df.columns:
+        forecast_df = forecast_df.loc[forecast_df["target_name"] == target_column]
+    forecast_df = forecast_df.reset_index(drop=True)
+    if len(forecast_df) != prediction_length:
+        raise ValueError(
+            f"Chronos-2 returned {len(forecast_df)} rows for prediction_length={prediction_length}"
+        )
+
+    quantile_values: List[List[float]] = []
+    for level in quantile_levels:
+        column = _find_quantile_column(forecast_df.columns, level)
+        values = [float(value) for value in forecast_df[column].tolist()]
+        quantile_values.append(values)
+
+    return _points_from_quantiles(
+        quantile_levels=quantile_levels,
+        quantile_values=quantile_values,
+        timestamps=timestamps,
+    )
+
+
+def _find_quantile_column(columns: Iterable[Any], level: float) -> Any:
+    available = list(columns)
+    candidates = [str(level), f"{level:g}", level]
+    for candidate in candidates:
+        if candidate in available:
+            return candidate
+    raise ValueError(f"Chronos-2 response is missing quantile column '{level}'")
 
 
 def _normalize_quantile_levels(levels: Iterable[float]) -> List[float]:
@@ -234,17 +416,24 @@ def _points_from_quantiles(
     quantile_values: Sequence[Sequence[float]],
     timestamps: Sequence[Optional[str]],
 ) -> List[ForecastPoint]:
+    if not quantile_values or any(len(values) != len(timestamps) for values in quantile_values):
+        raise ValueError("Chronos returned an invalid forecast horizon shape")
+
     points: List[ForecastPoint] = []
     labels = [_quantile_label(level) for level in quantile_levels]
     for step in range(len(quantile_values[0])):
+        step_values = [float(quantile_values[index][step]) for index in range(len(quantile_levels))]
+        if not all(math.isfinite(value) for value in step_values):
+            raise ValueError("Chronos returned non-finite quantile values")
+        if any(step_values[index] > step_values[index + 1] for index in range(len(step_values) - 1)):
+            raise ValueError("Chronos returned unordered quantile values")
         quantiles = {
-            label: round(float(quantile_values[index][step]), 6)
+            label: round(step_values[index], 6)
             for index, label in enumerate(labels)
         }
         median = quantiles["q50"]
-        non_median_values = [value for label, value in quantiles.items() if label != "q50"]
-        lower = min(non_median_values) if non_median_values else median
-        upper = max(non_median_values) if non_median_values else median
+        lower = min(quantiles.values())
+        upper = max(quantiles.values())
         points.append(
             ForecastPoint(
                 step=step + 1,
@@ -256,6 +445,41 @@ def _points_from_quantiles(
             )
         )
     return points
+
+
+def _response_timestamps(request: ForecastRequest) -> List[Optional[str]]:
+    if request.future_timestamps is not None:
+        return list(request.future_timestamps)
+    return _future_timestamps(request.timestamps, request.prediction_length)
+
+
+def _timestamp_alignment_warnings(request: ForecastRequest) -> List[str]:
+    timestamp_groups: List[Sequence[str]] = []
+    if request.timestamps:
+        timestamp_groups.append(request.timestamps)
+    if request.future_timestamps:
+        if request.timestamps:
+            timestamp_groups.append([request.timestamps[-1], *request.future_timestamps])
+        else:
+            timestamp_groups.append(request.future_timestamps)
+
+    for values in timestamp_groups:
+        if len(values) < 2:
+            continue
+        try:
+            parsed = [_parse_timestamp(value) for value in values]
+        except (TypeError, ValueError):
+            return [
+                "Supplied timestamps are irregular or unparseable; modeled observations in their given order "
+                "on an evenly spaced internal index."
+            ]
+        deltas = [parsed[index] - parsed[index - 1] for index in range(1, len(parsed))]
+        if deltas[0].total_seconds() <= 0 or any(delta != deltas[0] for delta in deltas[1:]):
+            return [
+                "Supplied timestamps are irregular or unparseable; modeled observations in their given order "
+                "on an evenly spaced internal index."
+            ]
+    return []
 
 
 def _future_timestamps(timestamps: Optional[Sequence[str]], prediction_length: int) -> List[Optional[str]]:
@@ -360,4 +584,3 @@ def _build_driver_contributions(values: Sequence[float], summary: ForecastSummar
             description="Difference between the latest observed value and the recent baseline.",
         ),
     ]
-

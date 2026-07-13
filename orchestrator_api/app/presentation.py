@@ -117,17 +117,23 @@ def _build_enriched_csv(
         )
 
     for index, point in enumerate(ml_output.get("horizon") or []):
+        future_row = csv_data.future_rows[index] if index < len(csv_data.future_rows) else None
         writer.writerow(
             {
                 "row_type": "forecast",
-                "timestamp": point.get("timestamp") or f"step {point.get('step')}",
+                "timestamp": point.get("timestamp")
+                or (future_row.timestamp if future_row is not None else f"step {point.get('step')}"),
                 "actual_value": "",
                 "predicted_median": _fmt_number(point.get("median")),
                 "predicted_lower": _fmt_number(point.get("lower")),
                 "predicted_upper": _fmt_number(point.get("upper")),
                 "explanation": explanation_text if index == 0 else "",
                 "recommendations": recommendations_text if index == 0 else "",
-                **{column: "" for column in csv_data.covariate_columns},
+                **(
+                    future_row.covariates
+                    if future_row is not None
+                    else {column: "" for column in csv_data.covariate_columns}
+                ),
             }
         )
 
