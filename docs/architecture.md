@@ -1,6 +1,6 @@
 # Architecture
 
-This MVP runs as a no-container cloud application on OCI Compute.
+This MVP runs as a no-container cloud application on OCI Compute. Runtime commands, model settings, and rollback procedures live in the [operations runbook](runbook.md).
 
 Core components:
 

@@ -1,103 +1,116 @@
 # OCI Terraform Scaffold
 
-This directory is a repeatable Terraform starting point for the current MVP topology:
+This optional scaffold creates the full two-VM MVP:
 
-- one VCN
-- one public subnet for the orchestrator/Chronos VM
-- one private subnet for the CPU vLLM VM
-- an internet gateway for the public subnet
-- a NAT gateway for private subnet outbound downloads
-- NSGs with narrow ingress rules
-- two `VM.Standard.E6.Ax.Flex` instances
-- cloud-init for the orchestrator and CPU vLLM services
+- public orchestrator/Chronos VM
+- private Qwen/vLLM VM
+- VCN, public/private subnets, internet and NAT gateways
+- route tables and narrowly scoped NSGs
+- cloud-init bootstrap for both services
 
-The current hand-built environment is the model for this scaffold:
+The manually deployed environment works. The Terraform path has not completed a fresh end-to-end apply and should be treated as experimental until validated in a disposable compartment.
 
-- public orchestrator/Chronos API on TCP/8080
-- private vLLM OpenAI-compatible endpoint on TCP/8000
-- vLLM reachable only from the orchestrator private IP
-- SSH to the private vLLM host through the public orchestrator host
+## Prerequisites
 
-## Files
+- Terraform 1.5 or newer
+- OCI provider credentials and a suitable compartment
+- quota for two `VM.Standard.E6.Ax.Flex` instances
+- an SSH key pair
+- a pushed application repository commit
+- an Oracle Linux image with Python 3.11 available
 
-- `versions.tf` - provider and Terraform version constraints.
-- `provider.tf` - OCI provider configuration.
-- `variables.tf` - inputs for tenancy, compartment, region, CIDRs, shapes, keys, and runtime settings.
-- `locals.tf` - common labels and image selection helper.
-- `network.tf` - VCN, gateways, route tables, DHCP options, and subnets.
-- `security.tf` - NSGs and role-specific ingress/egress rules.
-- `compute.tf` - orchestrator and vLLM Compute instances.
-- `outputs.tf` - IPs and SSH helper commands.
-- `cloud-init/orchestrator.yaml.tftpl` - installs this app and starts Chronos/orchestrator services.
-- `cloud-init/vllm-cpu.yaml.tftpl` - installs vLLM CPU with AMD Zen support and starts the private server.
-- `terraform.tfvars.example` - copy to `terraform.tfvars` and fill in real values.
+The pinned Chronos package requires Python 3.10 or newer. Verify the selected image and cloud-init package availability before applying; Python 3.9 will fail during bootstrap.
 
-## Usage
-
-For a friend-facing walkthrough, start with [QUICKSTART.md](QUICKSTART.md).
-
-Copy the example variables file:
+## Configure
 
 ```bash
+cd infra/terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit values:
+Set at least:
 
-```bash
-nano terraform.tfvars
+```hcl
+compartment_ocid    = "ocid1.compartment.oc1..example"
+availability_domain = "EXAMPLE:US-ASHBURN-AD-1"
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+
+admin_cidr_blocks      = ["your.public.ip/32"]
+public_api_cidr_blocks = ["your.public.ip/32"]
+
+app_repo_url = "https://github.com/<owner>/<repo>.git"
+app_repo_ref = "<tested-commit-sha>"
+vllm_model    = "Qwen/Qwen3-0.6B"
+vllm_api_key  = "<random-long-token>"
 ```
 
-At minimum, set:
+Find your public IP and generate a key with:
 
-- `compartment_ocid`
-- `availability_domain`
-- `ssh_public_key_path`
-- `admin_cidr_blocks`
-- `public_api_cidr_blocks`
-- `app_repo_url`
-- `vllm_api_key`
+```bash
+curl -s https://ifconfig.me/ip
+openssl rand -hex 32
+```
 
-Then run:
+Do not commit `terraform.tfvars`, state files, `.terraform/`, private keys, or generated credentials.
+
+## Apply
 
 ```bash
 terraform init
-terraform fmt
+terraform fmt -check -recursive
 terraform plan
 terraform apply
 ```
 
-## Secrets Warning
-
-`vllm_api_key` and `hf_token` are marked sensitive, but values used by cloud-init are still stored in Terraform state and instance metadata. This is acceptable for a first repeatable MVP, but production hardening should move secrets to OCI Vault and fetch them on boot using instance principals.
-
-Do not commit `terraform.tfvars`, Terraform state files, `.terraform/`, or any generated private keys.
-
-## Post-Apply Checks
-
-From your local machine:
+Capture the outputs:
 
 ```bash
-ssh -i ~/.ssh/id_ed25519 opc@<orchestrator_public_ip>
-curl -i http://127.0.0.1:8080/health
+terraform output
+terraform output -raw orchestrator_public_ip
+terraform output -raw vllm_private_ip
 ```
 
-From the orchestrator VM:
+Instances may report running before cloud-init finishes. On the orchestrator:
 
 ```bash
-curl -i http://<vllm_private_ip>:8000/health
+ssh opc@<orchestrator-public-ip>
+sudo cloud-init status --wait
+sudo systemctl status chronos-ml.service
+sudo systemctl status forecast-orchestrator.service
+curl -fsS http://127.0.0.1:8080/health | python3 -m json.tool
 ```
 
-For private vLLM SSH through the orchestrator:
+Inspect the private Qwen VM through the orchestrator:
 
 ```bash
-ssh -i ~/.ssh/id_ed25519 -J opc@<orchestrator_public_ip> opc@<vllm_private_ip>
+ssh -J opc@<orchestrator-public-ip> opc@<vllm-private-ip>
+sudo cloud-init status --wait
+sudo systemctl status vllm-openai.service
 ```
 
-## Known Follow-Ups
+## Update The Application
 
-- Move secrets from cloud-init/Terraform state to OCI Vault.
-- Add image pinning once you choose an Oracle Linux image OCID for your region.
-- Add optional Load Balancer or API Gateway in front of the orchestrator.
-- Add OCI Logging exports for the systemd services.
-- Convert cloud-init shell blocks into versioned scripts if they grow much more.
+Use the same exact-commit workflow as the main [operations runbook](../../docs/runbook.md):
+
+```bash
+cd <source-checkout>
+git fetch origin
+git checkout <tested-commit-sha>
+sudo env PYTHON_BIN=python3.11 deploy/install_compute_venv.sh
+sudo systemctl restart chronos-ml.service
+sudo systemctl restart forecast-orchestrator.service
+```
+
+Changing the cloud-init template does not update an existing VM. Do not apply Terraform merely to deploy application code.
+
+## Destroy
+
+For a disposable test stack:
+
+```bash
+terraform destroy
+```
+
+## Security
+
+Sensitive Terraform variables still enter state and instance metadata. Before production use, move secrets to OCI Vault, add authenticated ingress, export service logs, and validate replacement behavior in every Terraform plan.

@@ -1,0 +1,16 @@
+date,demand,promotion,temperature,day_type
+2026-07-01,118,0,78,weekday
+2026-07-02,121,0,80,weekday
+2026-07-03,124,0,82,weekday
+2026-07-04,132,1,85,weekend
+2026-07-05,136,1,87,weekend
+2026-07-06,129,0,84,weekday
+2026-07-07,131,0,83,weekday
+2026-07-08,134,0,85,weekday
+2026-07-09,142,1,88,weekday
+2026-07-10,146,1,90,weekday
+2026-07-11,151,1,91,weekend
+2026-07-12,148,1,89,weekend
+2026-07-13,,1,88,weekday
+2026-07-14,,0,84,weekday
+2026-07-15,,0,82,weekday
