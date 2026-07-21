@@ -21,16 +21,20 @@ public_subnet_cidr  = "10.0.0.0/24"
 private_subnet_cidr = "10.0.1.0/24"
 
 orchestrator_shape      = "VM.Standard.E6.Ax.Flex"
-orchestrator_ocpus      = 8
-orchestrator_memory_gbs = 64
+orchestrator_ocpus      = 2
+orchestrator_memory_gbs = 16
 orchestrator_private_ip = "10.0.0.71"
+orchestrator_boot_volume_size_gbs = 100
+orchestrator_python_version = "3.11"
 
 vllm_shape      = "VM.Standard.E6.Ax.Flex"
 vllm_ocpus      = 16
 vllm_memory_gbs = 128
 vllm_private_ip = "10.0.1.98"
-
-boot_volume_size_gbs = 200
+vllm_boot_volume_size_gbs = 200
+vllm_python_version = "3.12.13"
+uv_version          = "0.11.28"
+vllm_version        = "0.24.0"
 
 # Optional: set a known-good Oracle Linux image OCID for your region.
 image_id             = null

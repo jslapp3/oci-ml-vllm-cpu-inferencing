@@ -11,6 +11,8 @@ Public or tunneled client
 
 The Qwen VM does not need to change during ordinary orchestrator deployments.
 
+Quick test from a laptop: run `ssh -L 8080:127.0.0.1:8080 opc@<orchestrator-address>` and leave it open, then call `curl -fsS http://127.0.0.1:8080/health` from a second terminal.
+
 ## Host Paths
 
 | Purpose | Path |

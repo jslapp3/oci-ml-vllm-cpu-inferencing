@@ -7,13 +7,14 @@ write_files:
     owner: root:root
     content: |
       #!/usr/bin/env bash
-      set -euxo pipefail
+      set -euo pipefail
+      trap 'rm -f /root/bootstrap-orchestrator.sh' EXIT
 
       APP_REPO_URL="${app_repo_url}"
       APP_REPO_REF="${app_repo_ref}"
       APP_DIR="/opt/oci-vllm-ml-inference"
 
-      dnf install -y git python3 python3-pip python3-devel gcc gcc-c++ make firewalld
+      dnf install -y git python${orchestrator_python_version} python${orchestrator_python_version}-pip python${orchestrator_python_version}-devel gcc gcc-c++ make firewalld
 
       systemctl enable --now firewalld
       firewall-cmd --permanent --add-port=8080/tcp || true
@@ -30,7 +31,7 @@ write_files:
       git checkout "$APP_REPO_REF"
 
       chmod +x deploy/install_compute_venv.sh
-      deploy/install_compute_venv.sh
+      env PYTHON_BIN=python${orchestrator_python_version} deploy/install_compute_venv.sh
 
       cat >/etc/oci-forecast/forecast.env <<'ENVEOF'
       ML_SERVICE_PORT=8081

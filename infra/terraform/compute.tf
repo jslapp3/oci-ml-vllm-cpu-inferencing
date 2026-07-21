@@ -21,20 +21,21 @@ resource "oci_core_instance" "orchestrator" {
   source_details {
     source_type             = "image"
     source_id               = local.selected_image_id
-    boot_volume_size_in_gbs = var.boot_volume_size_gbs
+    boot_volume_size_in_gbs = var.orchestrator_boot_volume_size_gbs
   }
 
   metadata = {
     ssh_authorized_keys = file(var.ssh_public_key_path)
     user_data = base64encode(templatefile("${path.module}/cloud-init/orchestrator.yaml.tftpl", {
-      app_repo_url              = var.app_repo_url
-      app_repo_ref              = var.app_repo_ref
-      chronos_load_public_model = var.chronos_load_public_model
-      chronos_force_fallback    = var.chronos_force_fallback
-      vllm_base_url             = "http://${var.vllm_private_ip}:8000/v1"
-      vllm_model                = var.vllm_model
-      vllm_api_key              = var.vllm_api_key
-      vllm_timeout_seconds      = var.vllm_timeout_seconds
+      app_repo_url                = var.app_repo_url
+      app_repo_ref                = var.app_repo_ref
+      orchestrator_python_version = var.orchestrator_python_version
+      chronos_load_public_model   = var.chronos_load_public_model
+      chronos_force_fallback      = var.chronos_force_fallback
+      vllm_base_url               = "http://${var.vllm_private_ip}:8000/v1"
+      vllm_model                  = var.vllm_model
+      vllm_api_key                = var.vllm_api_key
+      vllm_timeout_seconds        = var.vllm_timeout_seconds
     }))
   }
 }
@@ -62,7 +63,7 @@ resource "oci_core_instance" "vllm" {
   source_details {
     source_type             = "image"
     source_id               = local.selected_image_id
-    boot_volume_size_in_gbs = var.boot_volume_size_gbs
+    boot_volume_size_in_gbs = var.vllm_boot_volume_size_gbs
   }
 
   metadata = {
@@ -73,6 +74,9 @@ resource "oci_core_instance" "vllm" {
       vllm_api_key              = var.vllm_api_key
       hf_token                  = var.hf_token
       vllm_cpu_kvcache_space    = var.vllm_cpu_kvcache_space_gbs
+      vllm_python_version       = var.vllm_python_version
+      uv_version                = var.uv_version
+      vllm_version              = var.vllm_version
     }))
   }
 }

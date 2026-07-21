@@ -111,6 +111,7 @@ RUN_CHRONOS_INTEGRATION=1 python3 -m pytest -m integration tests/test_chronos_in
 
 ## Operations
 
+- [Chronos/vLLM Explainer](docs/chronos-vllm-explainer.md) - how numeric projections and language generation are separated
 - [Runbook](docs/runbook.md) - deploy, update, smoke test, troubleshoot, rotate keys, and roll back
 - [Validation](docs/validation.md) - performance and forecast-quality gates still to record
 - [Terraform](infra/terraform/README.md) - optional fresh two-VM OCI deployment

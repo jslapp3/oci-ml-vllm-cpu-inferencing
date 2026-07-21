@@ -1,3 +1,10 @@
+resource "oci_core_security_list" "nsg_only" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.main.id
+  display_name   = "${local.name_prefix}-nsg-only-sl"
+  freeform_tags  = local.common_tags
+}
+
 resource "oci_core_network_security_group" "orchestrator" {
   compartment_id = var.compartment_ocid
   vcn_id         = oci_core_vcn.main.id

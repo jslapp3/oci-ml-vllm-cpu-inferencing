@@ -21,6 +21,11 @@ The manually deployed environment works. The Terraform path has not completed a 
 
 The pinned Chronos package requires Python 3.10 or newer. Verify the selected image and cloud-init package availability before applying; Python 3.9 will fail during bootstrap.
 
+The bootstrap installs the Python 3.11 package stream for Chronos and fails if
+that interpreter is unavailable. The vLLM host pins managed Python 3.12.13,
+uv 0.11.28, and vLLM 0.24.0 against the matching CPU wheel index. Update these
+versions deliberately and regenerate the reviewed plan when upgrading.
+
 ## Configure
 
 ```bash

@@ -87,13 +87,13 @@ variable "orchestrator_shape" {
 variable "orchestrator_ocpus" {
   description = "OCPUs for the orchestrator VM."
   type        = number
-  default     = 8
+  default     = 2
 }
 
 variable "orchestrator_memory_gbs" {
   description = "Memory for the orchestrator VM."
   type        = number
-  default     = 64
+  default     = 16
 }
 
 variable "orchestrator_private_ip" {
@@ -126,10 +126,40 @@ variable "vllm_private_ip" {
   default     = "10.0.1.98"
 }
 
-variable "boot_volume_size_gbs" {
-  description = "Boot volume size for each VM."
+variable "orchestrator_boot_volume_size_gbs" {
+  description = "Boot volume size for the orchestrator VM."
+  type        = number
+  default     = 100
+}
+
+variable "orchestrator_python_version" {
+  description = "Python major/minor version installed for Chronos and the orchestrator."
+  type        = string
+  default     = "3.11"
+}
+
+variable "vllm_boot_volume_size_gbs" {
+  description = "Boot volume size for the vLLM VM."
   type        = number
   default     = 200
+}
+
+variable "vllm_python_version" {
+  description = "Exact managed Python version installed for vLLM."
+  type        = string
+  default     = "3.12.13"
+}
+
+variable "uv_version" {
+  description = "Pinned uv installer version used on the vLLM host."
+  type        = string
+  default     = "0.11.28"
+}
+
+variable "vllm_version" {
+  description = "Pinned vLLM release installed from the matching CPU wheel index."
+  type        = string
+  default     = "0.24.0"
 }
 
 variable "image_id" {

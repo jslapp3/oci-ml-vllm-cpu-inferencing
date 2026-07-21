@@ -54,6 +54,7 @@ resource "oci_core_subnet" "public" {
   display_name               = "${local.name_prefix}-public-subnet"
   dns_label                  = "public"
   route_table_id             = oci_core_route_table.public.id
+  security_list_ids          = [oci_core_security_list.nsg_only.id]
   prohibit_public_ip_on_vnic = false
   freeform_tags              = local.common_tags
 }
@@ -65,6 +66,7 @@ resource "oci_core_subnet" "private" {
   display_name               = "${local.name_prefix}-private-subnet"
   dns_label                  = "private"
   route_table_id             = oci_core_route_table.private.id
+  security_list_ids          = [oci_core_security_list.nsg_only.id]
   prohibit_public_ip_on_vnic = true
   freeform_tags              = local.common_tags
 }

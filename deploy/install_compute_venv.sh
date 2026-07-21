@@ -14,11 +14,8 @@ ENV_FILE="${ENV_FILE:-${ENV_DIR}/forecast.env}"
 PYTHON_BIN="${PYTHON_BIN:-python3.11}"
 
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
-  PYTHON_BIN="python3"
-fi
-
-if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
-  echo "Could not find python3.11 or python3. Install Python 3.11 for best Chronos/Torch compatibility." >&2
+  echo "Required Python interpreter not found: ${PYTHON_BIN}" >&2
+  echo "Install Python 3.11 or explicitly set PYTHON_BIN to a supported interpreter." >&2
   exit 1
 fi
 
