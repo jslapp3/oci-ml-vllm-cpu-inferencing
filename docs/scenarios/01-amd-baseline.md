@@ -134,7 +134,7 @@ apply:
 | Admin CIDRs | Current operator public IP as one `/32`; do not copy the control environment's broad SSH rule |
 | Public API CIDRs | Current operator public IP as one `/32`, or `[]` when validating only through an SSH tunnel |
 | App repo URL | `https://github.com/jslapp3/oci-ml-vllm-cpu-inferencing.git` |
-| App repo ref | `4bc109a637dd673127ace74b119668e799d25be2` (confirmed on `origin/main`) |
+| App repo ref | `ebbe12fda862ff31c8a7abd5490978a9684fa28d` (tested bootstrap-hardening checkpoint on `origin/main`) |
 | vLLM model | `Qwen/Qwen3-0.6B` |
 | Orchestrator Python | `3.11` package stream; installer fails rather than falling back to Python 3.9 |
 | vLLM Python / uv / vLLM | `3.12.13` / `0.11.28` / `0.24.0` CPU wheel |
