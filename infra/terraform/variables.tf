@@ -163,13 +163,25 @@ variable "vllm_version" {
 }
 
 variable "image_id" {
-  description = "Optional Oracle Linux image OCID. If null, Terraform selects a recent Oracle Linux image for the orchestrator shape."
+  description = "Optional shared Oracle Linux image OCID override for both instances. Role-specific overrides take precedence; when all overrides are null, Terraform selects recent shape-compatible images."
+  type        = string
+  default     = null
+}
+
+variable "orchestrator_image_id" {
+  description = "Optional Oracle Linux image OCID override for the orchestrator. Takes precedence over image_id; if both are null, Terraform selects an image compatible with orchestrator_shape."
+  type        = string
+  default     = null
+}
+
+variable "vllm_image_id" {
+  description = "Optional Oracle Linux image OCID override for the vLLM host. Takes precedence over image_id; if both are null, Terraform selects an image compatible with vllm_shape."
   type        = string
   default     = null
 }
 
 variable "oracle_linux_version" {
-  description = "Oracle Linux version used by image lookup when image_id is null."
+  description = "Oracle Linux version used by each shape-specific image lookup when its applicable image overrides are null."
   type        = string
   default     = "9"
 }

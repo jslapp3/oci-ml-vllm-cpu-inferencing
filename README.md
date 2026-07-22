@@ -24,6 +24,205 @@ The orchestrator accepts one target series per request. Chronos-2 can use numeri
 
 See [Architecture](docs/architecture.md) for the request and failure flows.
 
+## Scenario Deployment Guide
+
+The architecture demo proves that the same AI application can run on different
+OCI CPU shapes without changing Python app code. Deploy the scenarios one at a
+time and keep each Terraform workspace/state separate.
+
+Do not commit `terraform.tfvars`, Terraform state, saved plans, private keys, or
+generated API keys. Keep `public_api_cidr_blocks = []` unless authenticated
+ingress has been added; use an SSH tunnel for validation.
+
+### Scenario 01: AMD Baseline
+
+Scenario 01 deploys the baseline two-VM stack with AMD E6 flexible shapes. The
+orchestrator VM hosts the FastAPI app and Chronos-2 service; the private vLLM VM
+hosts Qwen through vLLM's OpenAI-compatible API.
+
+```mermaid
+flowchart LR
+    user["Operator laptop"]
+    tunnel["SSH tunnel\nlocalhost:8080 -> orchestrator:8080"]
+
+    subgraph oci["OCI VCN 10.0.0.0/16"]
+      subgraph public_subnet["Public subnet 10.0.0.0/24"]
+        orch["Orchestrator + Chronos VM\nVM.Standard.E6.Ax.Flex\nforecast-orchestrator :8080\nchronos-ml 127.0.0.1:8081"]
+      end
+
+      subgraph private_subnet["Private subnet 10.0.1.0/24"]
+        vllm["Private vLLM VM\nVM.Standard.E6.Ax.Flex\nQwen/Qwen3-0.6B\nOpenAI API :8000/v1"]
+      end
+
+      nat["NAT gateway\npackage/model downloads"]
+      adb["Oracle Autonomous Database\noptional logging disabled by default"]
+    end
+
+    user --> tunnel --> orch
+    orch -->|"local HTTP"| orch
+    orch -->|"private HTTP + bearer token"| vllm
+    orch -. "optional DB writes" .-> adb
+    orch -. "egress" .-> nat
+    vllm -. "egress" .-> nat
+```
+
+From the Terraform directory, create a private base config:
+
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Set private values in `terraform.tfvars`: compartment, availability domain, SSH
+key path, admin CIDR, app repo/ref, and model settings. For the AMD baseline,
+keep the default shapes:
+
+```hcl
+orchestrator_shape = "VM.Standard.E6.Ax.Flex"
+vllm_shape         = "VM.Standard.E6.Ax.Flex"
+```
+
+Use the default workspace for Scenario 01:
+
+```bash
+terraform init
+terraform workspace select default
+terraform fmt -check -recursive
+terraform validate
+terraform plan
+terraform apply
+```
+
+After apply, validate the baseline:
+
+```bash
+terraform output
+ssh opc@<orchestrator-public-ip>
+sudo cloud-init status --wait
+sudo systemctl --no-pager --full status chronos-ml.service
+sudo systemctl --no-pager --full status forecast-orchestrator.service
+curl -fsS http://127.0.0.1:8080/health | python3 -m json.tool
+```
+
+Check the private vLLM route from the orchestrator network path:
+
+```bash
+curl -fsS http://<vllm-private-ip>:8000/v1/models \
+  -H "Authorization: Bearer <redacted-key>" | python3 -m json.tool
+```
+
+Then run a `/predict` smoke through the orchestrator. A successful Scenario 01
+response reports `ml_output.engine="chronos"`,
+`ml_output.model_family="chronos2"`, and non-fallback Qwen explanation and
+recommendation output.
+
+### Scenario 02: Intel Recreation
+
+Scenario 02 recreates the same stack with the same application repo/ref and the
+same cloud-init bootstrap path, but changes the private vLLM VM to Intel
+`VM.Standard4.Ax.Flex`. This is the key experiment: the app code remains the
+same, while the infrastructure input selects a different CPU family.
+
+```mermaid
+flowchart LR
+    user["Operator laptop"]
+    tunnel["SSH tunnel\nlocalhost:8080 -> orchestrator:8080"]
+
+    subgraph oci["OCI VCN 10.0.0.0/16\nseparate Terraform workspace/state"]
+      subgraph public_subnet["Public subnet 10.0.0.0/24"]
+        orch["Same orchestrator + Chronos app\nVM.Standard.E6.Ax.Flex\nsame app_repo_url/app_repo_ref\nsame forecast-orchestrator :8080\nsame chronos-ml 127.0.0.1:8081"]
+      end
+
+      subgraph private_subnet["Private subnet 10.0.1.0/24"]
+        vllm["Same vLLM bootstrap\nVM.Standard4.Ax.Flex\nQwen/Qwen3-0.6B\nsame OpenAI API :8000/v1"]
+      end
+
+      nat["NAT gateway\npackage/model downloads"]
+      adb["Oracle Autonomous Database\noptional logging disabled by default"]
+    end
+
+    user --> tunnel --> orch
+    orch -->|"local HTTP"| orch
+    orch -->|"same private route + bearer token"| vllm
+    orch -. "optional DB writes" .-> adb
+    orch -. "egress" .-> nat
+    vllm -. "egress" .-> nat
+```
+
+Keep the private `terraform.tfvars` from Scenario 01, then create or select a
+dedicated Scenario 02 workspace:
+
+```bash
+cd infra/terraform
+terraform workspace new scenario02-intel
+```
+
+If the workspace already exists:
+
+```bash
+terraform workspace select scenario02-intel
+```
+
+Verify the active workspace before planning:
+
+```bash
+terraform workspace show
+```
+
+The workspace name must be `scenario02-intel`. Plan with the non-secret Intel
+overlay:
+
+```bash
+terraform fmt -check -recursive
+terraform validate
+terraform plan -var-file=scenario02-intel.tfvars.example
+```
+
+The tracked overlay changes only the scenario resource prefix, the vLLM shape,
+and public API exposure:
+
+```hcl
+project_name            = "oci-vllm-ml-inference-s02-intel"
+vllm_shape              = "VM.Standard4.Ax.Flex"
+public_api_cidr_blocks = []
+```
+
+Review the plan before applying. It should create an isolated Scenario 02 stack
+and must not mutate the Scenario 01 AMD workspace. If the selected availability
+domain lacks `VM.Standard4.Ax.Flex` capacity, try another availability domain
+before choosing a different Intel shape.
+
+After apply, run the same validation gates as Scenario 01, plus confirm the CPU
+vendor on the vLLM host:
+
+```bash
+ssh -J opc@<orchestrator-public-ip> opc@<vllm-private-ip>
+lscpu
+sudo cloud-init status --wait
+sudo systemctl --no-pager --full status vllm-openai.service
+```
+
+Then repeat `/v1/models` and `/predict` validation. Scenario 02 passes when the
+Intel vLLM host reports `GenuineIntel`, the private vLLM endpoint returns
+`Qwen/Qwen3-0.6B`, and the same orchestrator app returns Chronos-2 output with
+non-fallback Qwen explanation and recommendations.
+
+### What Stayed The Same
+
+Both scenarios use the same Python application code, same service boundaries,
+same app installation flow, same cloud-init templates, and same vLLM
+OpenAI-compatible service contract:
+
+```text
+Client -> orchestrator :8080
+orchestrator -> Chronos service 127.0.0.1:8081
+orchestrator -> private vLLM endpoint :8000/v1
+```
+
+The Scenario 02 proof is that changing `vllm_shape` from AMD E6 to Intel
+Standard4 recreates the app successfully without changing `ml_service/`,
+`orchestrator_api/`, or `llm_service/`.
+
 ## Repository
 
 - `ml_service/` - Chronos-2 service and deterministic fallback
@@ -114,6 +313,7 @@ RUN_CHRONOS_INTEGRATION=1 python3 -m pytest -m integration tests/test_chronos_in
 - [Chronos/vLLM Explainer](docs/chronos-vllm-explainer.md) - how numeric projections and language generation are separated
 - [Runbook](docs/runbook.md) - deploy, update, smoke test, troubleshoot, rotate keys, and roll back
 - [Validation](docs/validation.md) - architecture-focused smoke and non-fallback gates
+- [Scenario records](docs/scenarios/README.md) - completed AMD/Intel recreation evidence and planned dual routing
 - [Terraform](infra/terraform/README.md) - optional fresh two-VM OCI deployment
 
 Do not expose port `8080` broadly without authenticated ingress. Keep Chronos port `8081` bound to localhost and the Qwen/vLLM endpoint private.

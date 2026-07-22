@@ -233,7 +233,7 @@ Post-rotation validation passed:
 - Scenario 01 evidence is intentionally redacted; raw environment files,
   secrets, Terraform state, saved plans, and full sensitive OCI inventory remain
   out of the repository.
-- Keep the v1 control deployment intact while v2 evolves through Intel migration
-  and dual-routing scenarios.
-- Scenario 02 still needs Intel `VM.Standard4.Ax.Flex` quota/capacity and
-  Terraform migration behavior validation.
+- Keep the v1 control and Scenario 01 AMD deployment intact while later
+  scenarios are developed.
+- Scenario 02 passed as a separate Intel recreation. Shape-swap behavior inside
+  an existing AMD state remains an optional experiment, not a Scenario 02 gate.

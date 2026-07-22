@@ -3,15 +3,15 @@
 This project is moving from a single working MVP into an architecture demo that proves three related ideas:
 
 1. the current AMD vLLM + Chronos deployment is reproducible from Terraform;
-2. the vLLM inferencing VM can migrate from AMD to Intel with minimal application change;
+2. the AMD architecture can be reproduced on Intel with minimal application change;
 3. a single deployment can route vLLM language inference between AMD and Intel endpoints.
 
 The important discipline: keep one app codebase and prove these as deployment scenarios, not as diverging project versions.
 
 The OCI compartment labels `v1-cpu-inferencing` and `v2-cpu-inferencing`
 identify environments, not application versions or code forks. v1 is the
-working control; v2 is the Terraform-managed scenario environment that evolves
-through scenarios 01–03.
+working control; v2 hosts the Terraform-managed scenario stacks. Scenario 01
+and Scenario 02 use separate Terraform workspaces/states.
 
 ## What The Repo Already Tells Us
 
@@ -38,7 +38,7 @@ These facts are discoverable from code, docs, Terraform, and example config.
 | Terraform orchestrator private IP | `10.0.0.71`. |
 | Terraform vLLM private IP | `10.0.1.98`. |
 | Terraform default shapes | `VM.Standard.E6.Ax.Flex` for both orchestrator and vLLM. |
-| Terraform status | Scenario 01 has passed a fresh v2 AMD baseline apply and smoke validation. |
+| Terraform status | Scenario 01 AMD and Scenario 02 Intel have both passed fresh, isolated applies and smoke validation. |
 
 ## What Was Captured From OCI
 
@@ -57,11 +57,11 @@ unredacted environment files into the repository.
 | Existing config | Redacted `/etc/oci-forecast/forecast.env` and `/etc/vllm/vllm.env` reviewed. |
 | Existing smoke output | `/health`, `/v1/models`, and `/predict` passed with secrets removed. |
 | AMD Terraform baseline | v2 clean apply, instance rotation, service gates, smoke test, public TCP/8080 denial, and drift check passed. |
-| Intel capacity | Still pending for `VM.Standard4.Ax.Flex`. |
+| Intel recreation | `VM.Standard4.Ax.Flex` was available in the configured AD and passed deployment, service, smoke, security, and drift gates. |
 
-The remaining OCI capture before scenario 02 is Intel-specific: quota/capacity,
-shape-change behavior, and whether private IP preservation works for the
-selected migration path.
+Scenario 02 is complete. The clean Intel stack used the same application
+repo/ref and service contract with no Python application-code change. The
+shape-specific image lookup was the only Terraform coupling fix required.
 
 ## Scenario Structure
 
@@ -70,7 +70,7 @@ Use one codebase and three scenario records:
 | Scenario | Purpose | Validation target |
 | --- | --- | --- |
 | `01-amd-baseline` | Prove current Terraform baseline works cleanly. | Fresh AMD vLLM + Chronos deployment from Terraform. |
-| `02-amd-to-intel-migration` | Prove shape migration from AMD to Intel. | Same vLLM service contract after migration. |
+| `02-amd-to-intel-migration` | Prove the AMD deployment pattern can be recreated on Intel. | Same app code and vLLM service contract on Intel. |
 | `03-dual-vllm-routing` | Prove routing between AMD and Intel vLLM endpoints. | `llm_route` or equivalent routing policy selects endpoint. |
 
 ## Milestone Order
@@ -90,16 +90,26 @@ Success means:
 - Public TCP/8080 stayed closed.
 - Final Terraform drift check passed.
 
-### Milestone 2 — Prove AMD-To-Intel vLLM Migration
+### Milestone 2 — Prove AMD-To-Intel vLLM Recreation
 
-Change the vLLM VM shape path from AMD to Intel, preferably to `VM.Standard4.Ax.Flex`.
+This milestone is complete. A clean Intel recreation of the AMD Scenario 01
+architecture was created with `VM.Standard4.Ax.Flex` for the private vLLM VM,
+using the same Terraform stack code and application repo/ref. The AMD Scenario
+01 stack remains available as the control; no lift-and-shift was performed.
 
 Success means:
 
 - No application code change is needed.
 - vLLM still exposes the same OpenAI-compatible API.
-- The orchestrator can keep using the same `VLLM_BASE_URL` if the private IP is preserved.
-- Any required Terraform or OCI shape-change behavior is documented.
+- The same CPU vLLM bootstrap path works on Intel, or any required bootstrap
+  adjustment is clearly documented as infrastructure work.
+- Any required orchestrator change is limited to configuration such as
+  `VLLM_BASE_URL`, not Python application code.
+- The Scenario 01 AMD stack remains available for comparison.
+
+Optionally, test changing only
+`vllm_shape` in an existing AMD stack to document OCI/Terraform shape-swap
+behavior. This is not required for Scenario 02 completion.
 
 ### Milestone 3 — Prove Dual vLLM Routing
 
@@ -114,15 +124,14 @@ Success means:
 
 ## Immediate Next Step
 
-Scenario 01 evidence is recorded. The next architecture-demo step is Scenario
-02 against the v2 environment:
+Scenarios 01 and 02 are complete and remain available in separate Terraform
+states: `default` for the AMD baseline and `scenario02-intel` for the Intel
+recreation. The next architecture-demo milestone is Scenario 03 dual-vLLM
+routing.
 
-1. confirm `VM.Standard4.Ax.Flex` quota and capacity in `us-ashburn-1`;
-2. plan the vLLM shape migration and determine whether OCI/Terraform performs
-   an in-place update or replacement;
-3. preserve the vLLM private IP where possible so `VLLM_BASE_URL` remains
-   stable; and
-4. rerun the service and `/predict` smoke gates after migration.
-
-Keep the v1 control deployment intact while v2 evolves through scenarios 02 and
-03.
+Before implementing Scenario 03, review
+[`03-dual-vllm-routing.md`](scenarios/03-dual-vllm-routing.md) and
+[`vllm-dual-vm-routing-plan.md`](vllm-dual-vm-routing-plan.md), then decide
+whether Scenario 03 should extend one existing stack or use another isolated
+workspace/state. Keep both completed scenario stacks intact until that design
+choice is explicit.

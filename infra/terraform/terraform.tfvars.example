@@ -36,8 +36,12 @@ vllm_python_version = "3.12.13"
 uv_version          = "0.11.28"
 vllm_version        = "0.24.0"
 
-# Optional: set a known-good Oracle Linux image OCID for your region.
-image_id             = null
+# Optional: use image_id as a shared override, or use the role-specific
+# overrides when the two shapes require different images. Automatic lookup is
+# shape-specific when the applicable overrides are null.
+image_id              = null
+orchestrator_image_id = null
+vllm_image_id         = null
 oracle_linux_version = "9"
 
 # Use your actual Git remote when you want cloud-init to install the app.

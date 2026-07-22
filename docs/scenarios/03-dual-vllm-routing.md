@@ -1,10 +1,23 @@
 # Scenario 03: Dual vLLM Routing
 
+Status: **Planned.** Scenarios 01 and 02 are complete and available as separate
+AMD and Intel reference deployments.
+
 ## Intent
 
 Prove that one deployment can run both AMD and Intel vLLM endpoints and route language-generation calls between them.
 
 Chronos numeric forecasting remains unchanged.
+
+## Starting Point
+
+- Scenario 01 AMD is validated in Terraform workspace `default`.
+- Scenario 02 Intel is validated in workspace `scenario02-intel` with
+  `VM.Standard4.Ax.Flex` and unchanged application code.
+- Neither completed stack should be mutated until Scenario 03 explicitly
+  chooses whether to extend one stack or use another isolated workspace/state.
+- The routing behavior requires deliberate application/API changes; it is not
+  an unfinished Scenario 02 item.
 
 ## Target Topology
 

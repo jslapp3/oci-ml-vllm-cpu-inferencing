@@ -20,7 +20,7 @@ resource "oci_core_instance" "orchestrator" {
 
   source_details {
     source_type             = "image"
-    source_id               = local.selected_image_id
+    source_id               = local.orchestrator_image_id
     boot_volume_size_in_gbs = var.orchestrator_boot_volume_size_gbs
   }
 
@@ -62,7 +62,7 @@ resource "oci_core_instance" "vllm" {
 
   source_details {
     source_type             = "image"
-    source_id               = local.selected_image_id
+    source_id               = local.vllm_image_id
     boot_volume_size_in_gbs = var.vllm_boot_volume_size_gbs
   }
 

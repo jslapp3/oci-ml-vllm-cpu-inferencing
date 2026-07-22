@@ -10,7 +10,8 @@ This optional scaffold creates the full two-VM MVP:
 
 The manually deployed v1 environment works. The Terraform-managed v2 AMD
 baseline completed a fresh end-to-end apply and smoke validation on 2026-07-21.
-Future shape migrations and dual-vLLM routing changes should still be validated
+The separate Scenario 02 Intel recreation completed the same gates with
+`VM.Standard4.Ax.Flex` on 2026-07-22. Future changes should still be validated
 with a reviewed plan before apply.
 
 ## Prerequisites
@@ -60,6 +61,54 @@ openssl rand -hex 32
 ```
 
 Do not commit `terraform.tfvars`, state files, `.terraform/`, private keys, or generated credentials.
+
+## Image Selection
+
+Terraform performs separate Oracle Linux image lookups for the orchestrator and
+vLLM hosts, keyed to `orchestrator_shape` and `vllm_shape` respectively. Leave
+the image override variables null for automatic shape-compatible selection.
+
+`orchestrator_image_id` and `vllm_image_id` provide role-specific overrides.
+The existing `image_id` remains a backward-compatible shared override and has
+lower precedence than either role-specific value. Review any explicit image
+OCID for compatibility with its target shape.
+
+## Scenario 02 Intel Recreation
+
+[`scenario02-intel.tfvars.example`](scenario02-intel.tfvars.example) is a
+tracked, non-secret overlay containing only the Scenario 02 differences. Keep
+compartment details, availability domain, SSH/admin inputs, app repo/ref, and
+tokens in the ignored `terraform.tfvars`; Terraform automatically loads that
+private base file before applying the explicit overlay.
+
+Use a dedicated workspace so Scenario 02 has separate state and cannot plan
+against the Scenario 01 AMD baseline:
+
+```bash
+terraform workspace select scenario02-intel
+terraform workspace show
+terraform plan -var-file=scenario02-intel.tfvars.example
+```
+
+The workspace already exists on the validated workstation. For a new backend,
+use `terraform workspace new scenario02-intel` once instead of `select`.
+The workspace check must print `scenario02-intel` before planning or applying.
+Review the plan before any apply. If the initial availability domain lacks
+`VM.Standard4.Ax.Flex` capacity, change the private placement input to another
+AD and plan again before considering another shape.
+
+On the workstation used for the 2026-07-22 Scenario 02 deployment, the vLLM
+key is stored in the macOS login keychain. Load it into the Terraform process
+without printing it:
+
+```bash
+export TF_VAR_vllm_api_key="$(security find-generic-password \
+  -a terraform-scenario02-intel \
+  -s oci-vllm-ml-inference-scenario02-vllm-api-key \
+  -w)"
+```
+
+Unset `TF_VAR_vllm_api_key` after Terraform or authenticated validation work.
 
 ## Apply
 

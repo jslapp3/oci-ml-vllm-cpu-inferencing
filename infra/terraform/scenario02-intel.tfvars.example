@@ -1,0 +1,15 @@
+# Non-secret Scenario 02 overlay. Use this with a private terraform.tfvars only
+# after selecting the dedicated scenario02-intel Terraform workspace.
+
+project_name = "oci-vllm-ml-inference-s02-intel"
+vllm_shape   = "VM.Standard4.Ax.Flex"
+
+# Keep the orchestrator API private and reach it through an SSH tunnel.
+public_api_cidr_blocks = []
+
+# Keep the same application repo/ref and CPU vLLM bootstrap inputs as Scenario
+# 01. Supply compartment, credentials, SSH key path, admin CIDRs, app repo/ref,
+# and tokens through ignored/private inputs; never add them here.
+
+# Placement remains a private input. If the initial availability domain lacks
+# VM.Standard4.Ax.Flex capacity, try another AD before changing the target shape.
