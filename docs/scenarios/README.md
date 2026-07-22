@@ -2,6 +2,10 @@
 
 This directory tracks the architecture-demo scenarios for the project.
 
+For first-time deployment, start with the root
+[`README.md`](../../README.md). These scenario records are evidence and planning
+notes, not the primary runbook.
+
 Each scenario should record:
 
 - intent;

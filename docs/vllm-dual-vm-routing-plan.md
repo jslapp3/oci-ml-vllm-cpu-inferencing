@@ -2,7 +2,11 @@
 
 ## Summary
 
-Add a second private-subnet vLLM VM on Intel while keeping the existing AMD vLLM VM. Treat both as equivalent OpenAI-compatible endpoints running the same model, then update the orchestrator to route language-generation calls through an endpoint registry.
+Create a fresh Scenario 03 Terraform stack with one private-subnet AMD vLLM VM
+and one private-subnet Intel vLLM VM. Treat both as equivalent
+OpenAI-compatible endpoints running the same model, then update the
+orchestrator to route language-generation calls through an endpoint registry.
+Do not mutate the completed Scenario 01 AMD or Scenario 02 Intel stacks.
 
 The recommended v1 implementation is intentionally low-risk: do not introduce a separate router service yet. Put routing in the orchestrator, expose an optional request parameter, support fallback to the other endpoint, and record routing metadata in responses.
 
@@ -15,6 +19,9 @@ Client
        -> AMD vLLM private endpoint :8000/v1
        -> Oracle Autonomous Database, optional
 ```
+
+For Scenario 03, "current" means the new isolated stack before route-aware app
+changes are validated, not the completed Scenario 01 or Scenario 02 states.
 
 Target architecture:
 
@@ -83,6 +90,10 @@ This is useful for simulating migration from AMD to Intel. It should be opt-in b
 
 Use orchestrator-level routing with a named endpoint registry.
 
+Use Terraform workspace `scenario03-dual-routing` for the first dual-endpoint
+deployment. Preserve `default` and `scenario02-intel` as completed evidence
+stacks.
+
 ### Endpoint names
 
 Use stable route names:
@@ -131,6 +142,10 @@ Supported values:
 | `shadow` | Return primary endpoint output and also call alternate endpoint for telemetry. |
 
 Invalid route values should return HTTP `400`.
+
+Initial implementation can ship `default`, `amd`, and `intel` first. Keep
+`auto` and `shadow` documented but deferred until explicit AMD/Intel route
+validation passes.
 
 ### Response interface
 

@@ -10,6 +10,23 @@ Zero-shot time-series forecasting on OCI Compute with:
 
 Chronos-2 is pinned to revision `ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a` through `chronos-forecasting==2.3.1`. The original `amazon/chronos-t5-small` adapter remains available for environment-only rollback.
 
+## Which Guide To Follow
+
+Use this README as the primary first-time runbook. It shows the end-to-end path
+for deploying and testing Scenario 01 on AMD and then Scenario 02 on Intel.
+
+The nested docs have narrower roles:
+
+- [Terraform reference](infra/terraform/README.md) - variable details,
+  workspace mechanics, image selection, and operational Terraform notes.
+- [Scenario records](docs/scenarios/README.md) - evidence of what has already
+  passed and what remains planned.
+- [Operations runbook](docs/runbook.md) - day-two service checks, updates,
+  rollback, troubleshooting, and key rotation after a stack exists.
+
+If you are deploying the experiment for the first time, start here and jump to
+the nested docs only when a step links to them or you need more detail.
+
 ## Architecture
 
 ```text
@@ -33,6 +50,18 @@ time and keep each Terraform workspace/state separate.
 Do not commit `terraform.tfvars`, Terraform state, saved plans, private keys, or
 generated API keys. Keep `public_api_cidr_blocks = []` unless authenticated
 ingress has been added; use an SSH tunnel for validation.
+
+Terraform always reads the same `infra/terraform/*.tf` source files. The
+workspace selects which deployed state you are operating on, and `-var-file`
+adds scenario-specific input values:
+
+| Scenario | Workspace | Extra var file | vLLM shape |
+| --- | --- | --- | --- |
+| Scenario 01 AMD baseline | `default` | none | `VM.Standard.E6.Ax.Flex` |
+| Scenario 02 Intel recreation | `scenario02-intel` | `scenario02-intel.tfvars.example` | `VM.Standard4.Ax.Flex` |
+
+Always run `terraform workspace show` before `plan`, `apply`, `output`, or
+`destroy`.
 
 ### Scenario 01: AMD Baseline
 

@@ -10,8 +10,8 @@ The important discipline: keep one app codebase and prove these as deployment sc
 
 The OCI compartment labels `v1-cpu-inferencing` and `v2-cpu-inferencing`
 identify environments, not application versions or code forks. v1 is the
-working control; v2 hosts the Terraform-managed scenario stacks. Scenario 01
-and Scenario 02 use separate Terraform workspaces/states.
+working control; v2 hosts the Terraform-managed scenario stacks. Scenario 01,
+Scenario 02, and Scenario 03 use separate Terraform workspaces/states.
 
 ## What The Repo Already Tells Us
 
@@ -115,6 +115,9 @@ behavior. This is not required for Scenario 02 completion.
 
 Add a second private vLLM endpoint and route language-generation calls between AMD and Intel.
 
+Use a new isolated Terraform workspace/state, `scenario03-dual-routing`, rather
+than mutating the completed Scenario 01 or Scenario 02 stacks.
+
 Success means:
 
 - Both endpoints run the same vLLM model.
@@ -127,11 +130,11 @@ Success means:
 Scenarios 01 and 02 are complete and remain available in separate Terraform
 states: `default` for the AMD baseline and `scenario02-intel` for the Intel
 recreation. The next architecture-demo milestone is Scenario 03 dual-vLLM
-routing.
+routing in a new isolated workspace/state: `scenario03-dual-routing`.
 
 Before implementing Scenario 03, review
 [`03-dual-vllm-routing.md`](scenarios/03-dual-vllm-routing.md) and
-[`vllm-dual-vm-routing-plan.md`](vllm-dual-vm-routing-plan.md), then decide
-whether Scenario 03 should extend one existing stack or use another isolated
-workspace/state. Keep both completed scenario stacks intact until that design
-choice is explicit.
+[`vllm-dual-vm-routing-plan.md`](vllm-dual-vm-routing-plan.md), then identify
+the smallest Terraform and app changes required for a fresh stack with one
+orchestrator, one AMD vLLM endpoint, and one Intel vLLM endpoint. Keep both
+completed scenario stacks intact.

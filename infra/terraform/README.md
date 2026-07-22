@@ -1,4 +1,9 @@
-# OCI Terraform Scaffold
+# OCI Terraform Reference
+
+For first-time deployment, start with the root
+[`README.md`](../../README.md). It is the primary runbook for deploying Scenario
+01 on AMD and Scenario 02 on Intel. This file is the Terraform reference: it
+explains variables, workspaces, image selection, and lower-level operations.
 
 This optional scaffold creates the full two-VM MVP:
 
@@ -61,6 +66,35 @@ openssl rand -hex 32
 ```
 
 Do not commit `terraform.tfvars`, state files, `.terraform/`, private keys, or generated credentials.
+
+## Workspace And File Loading
+
+Terraform workspaces select state, not source files. Every workspace reads the
+same `.tf` source files in this directory:
+
+```text
+provider.tf
+versions.tf
+variables.tf
+locals.tf
+network.tf
+security.tf
+compute.tf
+outputs.tf
+```
+
+Terraform automatically loads `terraform.tfvars` as the private base input
+file. Scenario overlays such as `scenario02-intel.tfvars.example` are loaded
+only when passed with `-var-file`.
+
+| Scenario | Workspace | Inputs |
+| --- | --- | --- |
+| Scenario 01 AMD baseline | `default` | `.tf` files + `terraform.tfvars` |
+| Scenario 02 Intel recreation | `scenario02-intel` | `.tf` files + `terraform.tfvars` + `scenario02-intel.tfvars.example` |
+
+Saved `*.tfplan` files are not loaded automatically. Apply one only when you
+intentionally run `terraform apply <file>.tfplan`; otherwise treat saved plans
+as local historical artifacts that may be stale.
 
 ## Image Selection
 
