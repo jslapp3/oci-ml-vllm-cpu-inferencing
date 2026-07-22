@@ -31,14 +31,14 @@ for MASE. Do not put private dataset contents in this file.
 
 | Gate | Required | Result | Status |
 | --- | --- | --- | --- |
-| Consecutive requests | 5 without deterministic fallback | Pending | Pending |
-| Current model | `autogluon/chronos-2-small` at pinned revision | Smoke passed; 5-run record pending | Pending |
-| Forecast engine | `ml_output.engine="chronos"` | Smoke passed; 5-run record pending | Pending |
-| Model family | `ml_output.model_family="chronos2"` | Smoke passed; 5-run record pending | Pending |
-| vLLM language path | non-fallback explanation and recommendations | Smoke passed; 5-run record pending | Pending |
-| Forecast integrity | finite, nondecreasing quantiles and exact horizon | Smoke passed; full run pending | Pending |
-| Covariate reporting | expected past and future names | Smoke passed; full run pending | Pending |
-| Rough latency | record observed timings, no strict p95 gate | Pending | Pending |
+| Consecutive requests | 5 without deterministic fallback | 5 passed on 2026-07-22 | Passed |
+| Current model | `autogluon/chronos-2-small` at pinned revision | 5 passed on 2026-07-22 | Passed |
+| Forecast engine | `ml_output.engine="chronos"` | 5 passed on 2026-07-22 | Passed |
+| Model family | `ml_output.model_family="chronos2"` | 5 passed on 2026-07-22 | Passed |
+| vLLM language path | non-fallback explanation and recommendations | 5 passed on 2026-07-22 | Passed |
+| Forecast integrity | finite, nondecreasing quantiles and exact horizon | 5 passed on 2026-07-22 | Passed |
+| Covariate reporting | expected past and future names | `promotion`, `region` reported for past and future covariates | Passed |
+| Rough latency | record observed timings, no strict p95 gate | 25.5s min, 30.1s max, 27.1s average over 5 requests | Recorded |
 
 Strict warm p95, peak RSS, and original-Chronos comparison gates are deferred.
 Do not change the VM shape, horizon, or model just to turn a failed smoke gate
