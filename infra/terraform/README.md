@@ -8,7 +8,10 @@ This optional scaffold creates the full two-VM MVP:
 - route tables and narrowly scoped NSGs
 - cloud-init bootstrap for both services
 
-The manually deployed environment works. The Terraform path has not completed a fresh end-to-end apply and should be treated as experimental until validated in a disposable compartment.
+The manually deployed v1 environment works. The Terraform-managed v2 AMD
+baseline completed a fresh end-to-end apply and smoke validation on 2026-07-21.
+Future shape migrations and dual-vLLM routing changes should still be validated
+with a reviewed plan before apply.
 
 ## Prerequisites
 

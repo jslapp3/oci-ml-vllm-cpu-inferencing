@@ -17,6 +17,7 @@ write_files:
       dnf install -y git python${orchestrator_python_version} python${orchestrator_python_version}-pip python${orchestrator_python_version}-devel gcc gcc-c++ make firewalld
 
       systemctl enable --now firewalld
+      firewall-cmd --permanent --add-service=ssh || true
       firewall-cmd --permanent --add-port=8080/tcp || true
       firewall-cmd --reload || true
 

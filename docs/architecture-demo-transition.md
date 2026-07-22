@@ -38,26 +38,30 @@ These facts are discoverable from code, docs, Terraform, and example config.
 | Terraform orchestrator private IP | `10.0.0.71`. |
 | Terraform vLLM private IP | `10.0.1.98`. |
 | Terraform default shapes | `VM.Standard.E6.Ax.Flex` for both orchestrator and vLLM. |
-| Terraform status | Docs explicitly say the Terraform path is experimental until validated by a fresh end-to-end apply. |
+| Terraform status | Scenario 01 has passed a fresh v2 AMD baseline apply and smoke validation. |
 
-## What We Still Need To Capture From OCI
+## What Was Captured From OCI
 
-These cannot be safely inferred from code. They require live OCI inspection or commands run on the existing VMs.
+These values were captured read-only for the working v1 control and redacted in
+the scenario record. Do not paste raw secrets, private keys, Terraform state, or
+unredacted environment files into the repository.
 
-| Area | Needed capture |
+| Area | Captured status |
 | --- | --- |
-| Existing deployment identity | Compartment, region, availability domain, VCN, subnets, route tables, gateways, NSGs/security lists. |
-| Existing instances | Instance OCIDs, display names, shapes, OCPUs, memory, image/OS version, boot volume size. |
-| Existing IPs | Orchestrator public/private IP and vLLM private IP. |
-| Existing runtime | Python versions, vLLM version, uv version, Torch version, Chronos package version. |
-| Existing service health | Current `systemctl status` for all three services. |
-| Existing service logs | Recent journal snippets for Chronos, orchestrator, and vLLM. |
-| Existing config | Redacted `/etc/oci-forecast/forecast.env` and `/etc/vllm/vllm.env`. |
-| Existing smoke output | `/health`, `/v1/models`, and `/predict` outputs with secrets removed. |
-| OCI capacity | Quota and availability for target Intel shape, especially `VM.Standard4.Ax.Flex`. |
-| Terraform behavior | Whether the current Terraform plan creates, updates, or replaces resources in a clean compartment. |
+| Existing deployment identity | Region, compartment, AD, VCN, subnet, route, gateway, and network-control details captured. |
+| Existing instances | Display names, shapes, OCPUs, memory, image/OS, and boot volumes captured; OCIDs kept out of tracked docs. |
+| Existing IPs | Private IPs captured; public IP details kept out of tracked docs where not required. |
+| Existing runtime | Python, vLLM, uv, Torch, and Chronos package versions captured. |
+| Existing service health | Current `systemctl status` and health checks captured for all three services. |
+| Existing service logs | Recent filtered journal snippets reviewed without committing sensitive raw logs. |
+| Existing config | Redacted `/etc/oci-forecast/forecast.env` and `/etc/vllm/vllm.env` reviewed. |
+| Existing smoke output | `/health`, `/v1/models`, and `/predict` passed with secrets removed. |
+| AMD Terraform baseline | v2 clean apply, instance rotation, service gates, smoke test, public TCP/8080 denial, and drift check passed. |
+| Intel capacity | Still pending for `VM.Standard4.Ax.Flex`. |
 
-Do not paste or commit raw secret values. Capture key names and redacted values only.
+The remaining OCI capture before scenario 02 is Intel-specific: quota/capacity,
+shape-change behavior, and whether private IP preservation works for the
+selected migration path.
 
 ## Scenario Structure
 
@@ -73,17 +77,18 @@ Use one codebase and three scenario records:
 
 ### Milestone 1 — Validate AMD Terraform Baseline
 
-This is the control case. Do not start Intel or routing work until this is done.
+This control case is complete for the architecture demo.
 
 Success means:
 
-- Terraform formats, validates, plans, and applies in a disposable environment.
-- Cloud-init completes on both VMs.
-- `chronos-ml.service`, `forecast-orchestrator.service`, and `vllm-openai.service` start.
-- vLLM `/v1/models` works from the orchestrator network path.
-- Orchestrator `/health` works.
-- `/predict` smoke test works or degrades in an explained way.
-- Validation evidence is recorded.
+- Terraform formatted, validated, planned, and applied in the isolated v2 environment.
+- Cloud-init completed on both VMs.
+- `chronos-ml.service`, `forecast-orchestrator.service`, and `vllm-openai.service` started.
+- vLLM `/v1/models` worked from the orchestrator network path.
+- Orchestrator `/health` worked.
+- `/predict` smoke returned Chronos-2 output and non-fallback Qwen text.
+- Public TCP/8080 stayed closed.
+- Final Terraform drift check passed.
 
 ### Milestone 2 — Prove AMD-To-Intel vLLM Migration
 
@@ -109,13 +114,15 @@ Success means:
 
 ## Immediate Next Step
 
-The existing manual deployment has been captured and moved into
-`cpu-inferencing/v1-cpu-inferencing`. New Terraform work targets the sibling
-`cpu-inferencing/v2-cpu-inferencing` compartment. OCI-managed protected DNS
-resolver/view resources remain in the parent compartment.
+Record the final Scenario 01 evidence in the scenario record, then begin
+Scenario 02 against the v2 environment:
 
-The v2 Terraform plan contains 17 creates, zero changes, and zero destroys.
-Review and apply that saved plan, validate cloud-init and all service/smoke
-gates, and record the evidence here and in scenario 01.
+1. confirm `VM.Standard4.Ax.Flex` quota and capacity in `us-ashburn-1`;
+2. plan the vLLM shape migration and determine whether OCI/Terraform performs
+   an in-place update or replacement;
+3. preserve the vLLM private IP where possible so `VLLM_BASE_URL` remains
+   stable; and
+4. rerun the service and `/predict` smoke gates after migration.
 
-The existing deployment should remain untouched until the clean baseline is proven.
+Keep the v1 control deployment intact while v2 evolves through scenarios 02 and
+03.

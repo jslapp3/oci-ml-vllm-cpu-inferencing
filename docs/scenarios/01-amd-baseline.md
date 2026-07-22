@@ -29,7 +29,7 @@ This is the control scenario for later Intel migration and dual-routing work.
 | VCN CIDR | `10.0.0.0/16` |
 | Public subnet CIDR | `10.0.0.0/24` |
 | Private subnet CIDR | `10.0.1.0/24` |
-| Terraform status | Not yet freshly validated end-to-end. |
+| Terraform status | Fresh v2 apply and smoke validation passed. |
 
 ## Inputs To Capture
 
@@ -184,20 +184,55 @@ curl -fsS -X POST http://127.0.0.1:8080/predict \
 
 ## Results
 
-Terraform initialization, formatting, validation, and planning pass. The saved
-v2 plan contains 17 creates, zero changes, and zero destroys. It targets only
-`v2-cpu-inferencing`; it has not been applied. The existing deployment control
-and its post-compartment-move validation both pass, but they do not satisfy the
-fresh-apply success gate.
+Scenario 01 passed on 2026-07-21 in the isolated
+`cpu-inferencing/v2-cpu-inferencing` environment.
+
+Terraform initialization, formatting, validation, and planning passed. The v2
+plan contained 17 creates, zero changes, and zero destroys, and targeted only
+the v2 compartment. The plan was applied successfully.
+
+An initial post-apply SSH check failed because the operator public egress IP had
+changed. The ignored local `terraform.tfvars` admin CIDR was updated, and
+Terraform applied a scoped NSG-only change: one SSH rule was added and one stale
+SSH rule was removed.
+
+During validation, `vllm-openai.service` was found to expose the vLLM API key in
+process arguments through `--api-key`. The cloud-init template now relies on
+`VLLM_API_KEY` from `/etc/vllm/vllm.env`, which vLLM supports, and omits
+`--api-key` from `ExecStart`. Because the prior key had been exposed through
+service arguments, it was treated as compromised. A new per-environment key was
+generated and the v2 instances were force-replaced. Network resources were
+preserved.
 
 Both v2 subnets use an explicitly empty security list so OCI's default security
 list cannot broaden access. The NSGs provide the intended rules: SSH from the
 current admin `/32`, no public TCP/8080 rule, and private SSH/TCP/8000 from the
 orchestrator to vLLM.
 
+Post-rotation validation passed:
+
+- SSH to the orchestrator passed.
+- Orchestrator cloud-init reported `done` with no errors.
+- `chronos-ml.service` and `forecast-orchestrator.service` were active.
+- Local Chronos `/health` and orchestrator `/health` returned `status=ok`.
+- Chronos preload succeeded with the expected public model.
+- Private SSH to vLLM through the orchestrator passed.
+- vLLM cloud-init reported `done` with no errors.
+- `vllm-openai.service` was active.
+- The vLLM service `MainPID` command line no longer contained `--api-key`.
+- Authenticated private vLLM `/v1/models` from the orchestrator returned
+  `Qwen/Qwen3-0.6B`.
+- The Scenario 01 `/predict` smoke test completed with Chronos-2 output, no
+  warnings, and non-fallback `Qwen/Qwen3-0.6B` explanation and recommendations.
+- Public TCP/8080 denial passed; direct public `/health` timed out as expected.
+- Final Terraform drift check passed.
+
 ## Known Gaps
 
-- Terraform has not yet completed a fresh end-to-end apply.
-- OCI quota availability exceeds the requested 18 AMD E6 OCPUs and 144 GB of
-  memory, but physical capacity remains an apply-time check.
-- Keep the v1 control deployment intact while validating the v2 stack.
+- Scenario 01 evidence is intentionally redacted; raw environment files,
+  secrets, Terraform state, saved plans, and full sensitive OCI inventory remain
+  out of the repository.
+- Keep the v1 control deployment intact while v2 evolves through Intel migration
+  and dual-routing scenarios.
+- Scenario 02 still needs Intel `VM.Standard4.Ax.Flex` quota/capacity and
+  Terraform migration behavior validation.

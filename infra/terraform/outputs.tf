@@ -13,11 +13,6 @@ output "vllm_private_ip" {
   value       = oci_core_instance.vllm.private_ip
 }
 
-output "orchestrator_health_url" {
-  description = "Public health URL for the orchestrator service."
-  value       = "http://${oci_core_instance.orchestrator.public_ip}:8080/health"
-}
-
 output "ssh_orchestrator" {
   description = "SSH command for the public orchestrator VM."
   value       = "ssh opc@${oci_core_instance.orchestrator.public_ip}"

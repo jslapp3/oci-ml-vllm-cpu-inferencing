@@ -13,6 +13,7 @@ write_files:
       dnf install -y git curl jq findutils which procps-ng tar gcc gcc-c++ make numactl numactl-libs openssl firewalld
 
       systemctl enable --now firewalld
+      firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="${orchestrator_private_cidr}" port protocol="tcp" port="22" accept' || true
       firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="${orchestrator_private_cidr}" port protocol="tcp" port="8000" accept' || true
       firewall-cmd --reload || true
 
@@ -63,7 +64,7 @@ write_files:
       Group=opc
       WorkingDirectory=/opt/vllm
       EnvironmentFile=/etc/vllm/vllm.env
-      ExecStart=/opt/vllm/.venv/bin/vllm serve $${VLLM_MODEL} --host 0.0.0.0 --port 8000 --api-key $${VLLM_API_KEY} --dtype bfloat16
+      ExecStart=/opt/vllm/.venv/bin/vllm serve $${VLLM_MODEL} --host 0.0.0.0 --port 8000 --dtype bfloat16
       Restart=always
       RestartSec=10
       LimitNOFILE=65535

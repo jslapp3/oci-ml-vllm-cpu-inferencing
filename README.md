@@ -113,7 +113,7 @@ RUN_CHRONOS_INTEGRATION=1 python3 -m pytest -m integration tests/test_chronos_in
 
 - [Chronos/vLLM Explainer](docs/chronos-vllm-explainer.md) - how numeric projections and language generation are separated
 - [Runbook](docs/runbook.md) - deploy, update, smoke test, troubleshoot, rotate keys, and roll back
-- [Validation](docs/validation.md) - performance and forecast-quality gates still to record
+- [Validation](docs/validation.md) - architecture-focused smoke and non-fallback gates
 - [Terraform](infra/terraform/README.md) - optional fresh two-VM OCI deployment
 
 Do not expose port `8080` broadly without authenticated ingress. Keep Chronos port `8081` bound to localhost and the Qwen/vLLM endpoint private.
