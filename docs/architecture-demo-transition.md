@@ -114,8 +114,8 @@ Success means:
 
 ## Immediate Next Step
 
-Record the final Scenario 01 evidence in the scenario record, then begin
-Scenario 02 against the v2 environment:
+Scenario 01 evidence is recorded. The next architecture-demo step is Scenario
+02 against the v2 environment:
 
 1. confirm `VM.Standard4.Ax.Flex` quota and capacity in `us-ashburn-1`;
 2. plan the vLLM shape migration and determine whether OCI/Terraform performs

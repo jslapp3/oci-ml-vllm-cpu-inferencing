@@ -49,7 +49,8 @@ Record these before applying:
 ## Existing Deployment Control Capture
 
 Captured read-only on 2026-07-21. This records the working manually deployed
-control; it is not evidence that the Terraform baseline has passed.
+control. Fresh Terraform baseline evidence is recorded in the results section
+below.
 
 ### OCI Inventory
 
@@ -117,9 +118,9 @@ The same health and smoke gates passed after the compartment move, including a
 post-move `/predict` request with Chronos-2 loaded, no warnings, and non-fallback
 `Qwen/Qwen3-0.6B` output.
 
-The live application checkout is at commit
-`876a324955ebc2e29e55346e6913258be237c8ba`; the clean Terraform validation
-should instead use the reviewed, pushed commit selected below.
+At capture time, the v1 live application checkout was commit
+`876a324955ebc2e29e55346e6913258be237c8ba`. The v2 clean Terraform validation
+used the reviewed, pushed commit selected below.
 
 ## Clean Baseline Input Candidates
 
