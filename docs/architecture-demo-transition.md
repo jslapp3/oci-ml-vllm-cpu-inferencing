@@ -25,7 +25,7 @@ These facts are discoverable from code, docs, Terraform, and example config.
 | vLLM role | vLLM generates explanation, recommendations, and optional note-derived features; it does not generate numeric forecasts. |
 | Numeric model | Current Chronos model is `autogluon/chronos-2-small`, revision `ddec01313e50b6bc58ebaa92ede81bc24a3d9f9a`. |
 | Rollback model | Original Chronos rollback is `amazon/chronos-t5-small`. |
-| vLLM default model | Local examples use `meta-llama/Llama-3.1-8B-Instruct`; Terraform example uses `Qwen/Qwen3-0.6B`. |
+| vLLM default model | Local, Compute, and Terraform examples use `Qwen/Qwen3-0.6B`. |
 | Runtime style | No containers; Python virtual environments plus `systemd`. |
 | App install path | `/opt/oci-vllm-ml-inference`. |
 | App env path | `/etc/oci-forecast/forecast.env`. |

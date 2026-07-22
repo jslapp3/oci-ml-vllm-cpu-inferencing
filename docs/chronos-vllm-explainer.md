@@ -55,7 +55,7 @@ vLLM runs as a separate OpenAI-compatible chat-completions endpoint. In the Terr
 vllm serve ${VLLM_MODEL} --host 0.0.0.0 --port 8000 --api-key ${VLLM_API_KEY} --dtype bfloat16
 ```
 
-The orchestrator reaches it through `VLLM_BASE_URL`, for example `http://<vllm-private-ip>:8000/v1`, and sends OpenAI-compatible `POST /chat/completions` requests. The default local configuration names `meta-llama/Llama-3.1-8B-Instruct`; the Terraform example uses `Qwen/Qwen3-0.6B`. In either case, vLLM is just the serving runtime for the selected language model.
+The orchestrator reaches it through `VLLM_BASE_URL`, for example `http://<vllm-private-ip>:8000/v1`, and sends OpenAI-compatible `POST /chat/completions` requests. The default examples use `Qwen/Qwen3-0.6B`; vLLM is just the serving runtime for the selected language model.
 
 The vLLM client performs three language tasks:
 
